@@ -5,7 +5,10 @@
 ansible_host: "{{ ip | default(inventory_hostname) }}"
 # IdentitiesOnly stops ssh from offering every key in the agent and tripping
 # MaxAuthTries ("Too many authentication failures") on hosts with many keys loaded.
+# accept-new records an unknown host's key on first contact and refuses a changed key
+# afterwards; a host that was rebuilt needs `ssh-keygen -R <address>` first.
 ansible_ssh_common_args: >-
   -o IdentitiesOnly=yes
+  -o StrictHostKeyChecking=accept-new
   -o ServerAliveInterval=30
   -o ServerAliveCountMax=3

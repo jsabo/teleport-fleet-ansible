@@ -52,6 +52,29 @@ tsh ssh root@<node>                                                  # works
 
 `site.yml` runs the four in sequence for an unattended fleet.
 
+### What to expect
+
+Measured on three hosts (two Ubuntu 24.04, one Rocky 9) against Teleport 18.11.1, with
+the per-task profile and timer that `ansible.cfg` enables (`ansible.posix.profile_tasks`,
+`ansible.posix.timer`; every run ends with a slowest-tasks list and a total):
+
+| Phase | Time | Where it goes |
+|---|---|---|
+| 00 preflight | 9 s | facts, six asserts, two HTTPS checks per host, three `tsh`/`tctl` calls on the controller |
+| 10 enrol | 46 s | `teleport-update enable` (downloads and installs the agent, ~12 s), the agent's first join (~10 s), one wait for all node records, four `tctl` calls |
+| 20 verify | 8 s | read-only; a second run reports `changed=0` |
+| 30 harden | 9 s | two batches (`serial: [2, 10, "25%"]`) |
+
+Hosts install in parallel, so a larger fleet costs little more wall-clock time; the
+controller-side `tctl` calls are fixed in number (create, read, list, remove), not
+per host.
+
+Host keys are checked. The OpenSSH transport accepts a host's key on first contact and
+refuses a changed one afterwards (`StrictHostKeyChecking=accept-new`), so a rebuilt
+host needs `ssh-keygen -R <address>` before it is enrolled again. The Teleport transport
+verifies host certificates against the cluster CA that `tsh config` writes into its
+known_hosts file.
+
 ### What you need
 
 - **Controller**: `ansible-core` 2.15+, `tsh` and `tctl` matching the cluster, `jq`.

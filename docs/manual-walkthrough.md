@@ -126,7 +126,8 @@ journalctl -u teleport -f                          # watch: "Successfully obtain
 Controller:
 
 ```bash
-tctl inventory ls --services node                  # web-01 appears with upgrader "binary" and its group
+tctl nodes ls                                      # web-01 appears within seconds (if your role can see it)
+tctl inventory ls --services node                  # every connected agent, role-independent; can lag by minutes
 tctl get token/node-web-01 --format=yaml | grep -A4 'status:'   # bound_host_id = the host's UUID
 cat /var/lib/teleport/host_uuid                    # (on the host) the same UUID
 tsh ls                                             # visible if your role matches its labels

@@ -74,7 +74,7 @@
         ansible_host: "{{ item.value.ip }}"
         ansible_user: ansible
         ansible_ssh_private_key_file: "{{ ssh_private_key_file }}"
-        ansible_ssh_common_args: -o IdentitiesOnly=yes -o StrictHostKeyChecking=no
+        ansible_ssh_common_args: -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new
       loop: "{{ lab_vms | dict2items }}"
       loop_control:
         label: "{{ item.key }}"

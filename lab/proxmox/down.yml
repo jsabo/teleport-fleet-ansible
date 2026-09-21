@@ -31,7 +31,7 @@
   tasks:
     - name: Wait for the agents to close their connections
       ansible.builtin.pause:
-        seconds: 20
+        seconds: 12
 
 - name: Destroy the lab VMs
   hosts: localhost

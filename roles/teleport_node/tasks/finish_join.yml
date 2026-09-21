@@ -16,11 +16,11 @@
   ansible.builtin.meta: end_play
   when: teleport_joined_hosts | length == 0
 
-# The agent inventory lists every connected agent regardless of the caller's roles,
-# so it is the reliable signal. `tctl nodes ls` and `tsh ls` only show nodes the
-# caller's roles can access.
-- name: Wait for every joining host to appear in the agent inventory
-  ansible.builtin.command: "{{ teleport_tctl }} inventory ls --format=json --services node"
+# A node record appears seconds after the join; matching on the host UUID makes the
+# check exact. `tctl nodes ls` only shows nodes the controller's roles can access,
+# which the verify and harden phases need anyway.
+- name: Wait for every joining host's node record
+  ansible.builtin.command: "{{ teleport_tctl }} nodes ls --format=json"
   register: teleport_registration
   delegate_to: localhost
   become: false
@@ -30,23 +30,26 @@
   delay: 5
   until: >-
     teleport_registration.rc == 0 and
-    (teleport_joined_hosts | map('extract', hostvars, 'teleport_node_name_fact')
-     | difference(teleport_registration.stdout | from_json | map(attribute='spec.hostname'))) | length == 0
+    (teleport_joined_hosts | map('extract', hostvars, 'teleport_host_uuid')
+     | difference(teleport_registration.stdout | from_json | map(attribute='metadata.name'))) | length == 0
   ignore_errors: true
 
 - name: Collect the agent log where registration did not happen
-  ansible.builtin.command: journalctl -u teleport -n 60 --no-pager
+  ansible.builtin.command: journalctl -u teleport -n 40 --no-pager
   register: teleport_journal
   changed_when: false
   failed_when: false
   when: >-
     teleport_joined_this_run is defined and
-    teleport_nodename_effective not in (teleport_registration.stdout | default('[]') | from_json | map(attribute='spec.hostname') | list)
+    teleport_host_uuid not in (teleport_registration.stdout | default('[]') | from_json | map(attribute='metadata.name') | list)
 
 - name: Fail the hosts that did not register
   ansible.builtin.fail:
     msg: |
-      {{ teleport_nodename_effective }} ({{ teleport_host_uuid }}) did not register within 2 minutes.
+      {{ teleport_nodename_effective }} ({{ teleport_host_uuid }}) is not listed by `tctl nodes ls` after 2 minutes.
+      Either the agent did not join (see the log below) or the controller's roles do not
+      match its labels {{ teleport_all_static_labels }} (tctl nodes ls is filtered by role;
+      compare with `tctl inventory ls --services node`, which is not).
       Token: {{ teleport_join_token_name }}
       {{ teleport_journal.stdout | default('no journal output') }}
   when: teleport_journal is not skipped
