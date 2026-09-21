@@ -68,7 +68,9 @@ systemctl cat teleport | head -12                  # the unit teleport-update wr
 ```
 
 `enable` downloaded the full agent for the advertised version, installed it, and set up
-the five-minute update timer. It did not start the agent yet. Replace
+the five-minute update timer. It did not start the agent yet. It prints a note that tbot
+is installed but not running: the updater manages Machine ID's `tbot` as well, and the
+note is expected on a plain server. Replace
 `https://cdn.teleport.dev` with your mirror and add `--base-url` if you run one
 ([mirror.md](mirror.md)).
 
@@ -152,9 +154,13 @@ optional.
 ```bash
 tsh ssh root@web-01 'systemctl disable --now ssh.socket ssh.service'      # Debian / Ubuntu
 tsh ssh root@web-01 'systemctl disable --now sshd.service'                # RHEL / Rocky / Alma / Amazon
-ssh root@<ip>                                      # refused
+ssh root@<ip>                                      # "Connection refused"
 tsh ssh root@web-01 uptime                         # works
 ```
+
+(`systemctl is-enabled` exits non-zero for a disabled unit, so `tsh ssh` reports
+"Process exited with status 1" if you check that way; the refused connection above is
+the proof.)
 
 The unit files stay; a console session can `systemctl enable --now ssh` at any time.
 
