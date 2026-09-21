@@ -41,7 +41,7 @@
       community.crypto.openssl_csr:
         path: "{{ mirror_tls_dir }}/ca.csr"
         privatekey_path: "{{ mirror_tls_dir }}/ca.key"
-        common_name: Fleet Demo Mirror CA
+        common_name: Fleet Lab Mirror CA
         basic_constraints: ["CA:TRUE"]
         basic_constraints_critical: true
         key_usage: [keyCertSign, cRLSign]

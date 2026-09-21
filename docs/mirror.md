@@ -101,7 +101,7 @@ changes and the agent is not restarted.
 For a one-off run the updater also honours `TELEPORT_CDN_BASE_URL` in its environment;
 the persisted `--base-url` is the durable setting.
 
-## Demo
+## Lab
 
 `lab/proxmox/up.yml -e lab_mirror=true` plus `lab/proxmox/mirror.yml` add a fourth VM serving the synced
 artifacts over HTTPS with a private CA (addressed by IP) and point `cdn.teleport.dev` at

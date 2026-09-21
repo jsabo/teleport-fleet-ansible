@@ -44,7 +44,7 @@ tsh ssh root@fleet-ubuntu-1                                    # works
 ```
 
 Fresh VMs each time: `reset.yml` recreates the disks from the downloaded cloud images
-(about 3.5 minutes for the full destroy, recreate and onboard cycle, measured). Two Ubuntu 24.04 hosts and one Rocky Linux 9 host by default (`lab/proxmox/variables.tf`).
+(about five minutes for the full destroy, recreate and onboard cycle, measured). Two Ubuntu 24.04 hosts and one Rocky Linux 9 host by default (`lab/proxmox/variables.tf`).
 
 ## Beats
 
