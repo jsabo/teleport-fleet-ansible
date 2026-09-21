@@ -1,0 +1,10 @@
+---
+# The unit teleport-update installs maps `reload` to SIGHUP: the agent forks a child
+# that re-reads /etc/teleport.yaml and takes over without dropping sessions. Static
+# labels are read once at start, so this is how a label change takes effect. On a
+# first enrolment join.yml starts the service itself; skip the reload then.
+- name: reload teleport
+  ansible.builtin.systemd_service:
+    name: teleport
+    state: reloaded
+  when: not (teleport_needs_join | default(false) | bool)

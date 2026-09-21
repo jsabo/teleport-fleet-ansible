@@ -1,0 +1,140 @@
+---
+# Mirror mode: sync the artifacts to the controller, then provision the fleet-mirror
+# VM (nginx, private CA, the artifact directory) and fetch its CA for the fleet.
+#   ansible-playbook -i inventory/lab.yml lab/proxmox/mirror.yml
+# playbook_dir inside the imported playbook is playbooks/, hence the ../lab/proxmox.
+- import_playbook: ../../playbooks/mirror-sync.yml
+  vars:
+    mirror_dest: "{{ playbook_dir }}/../../lab/proxmox/.mirror/teleport"
+    mirror_archs: [amd64]
+
+- name: Artifact mirror
+  hosts: mirror
+  vars_files:
+    - ../../vars/transport-openssh.yml
+  gather_facts: true
+  become: true
+  vars:
+    mirror_name: fleet-mirror.lab
+    mirror_root: /srv/teleport
+    mirror_tls_dir: /etc/nginx/tls
+  tasks:
+    - name: Install nginx
+      ansible.builtin.package:
+        name: nginx
+        state: present
+
+    - name: Create directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: ["{{ mirror_root }}", "{{ mirror_tls_dir }}"]
+
+    - name: Create the CA key
+      community.crypto.openssl_privatekey:
+        path: "{{ mirror_tls_dir }}/ca.key"
+        type: ECC
+        curve: secp256r1
+
+    - name: Create the CA request
+      community.crypto.openssl_csr:
+        path: "{{ mirror_tls_dir }}/ca.csr"
+        privatekey_path: "{{ mirror_tls_dir }}/ca.key"
+        common_name: Fleet Demo Mirror CA
+        basic_constraints: ["CA:TRUE"]
+        basic_constraints_critical: true
+        key_usage: [keyCertSign, cRLSign]
+        key_usage_critical: true
+
+    - name: Self-sign the CA
+      community.crypto.x509_certificate:
+        path: "{{ mirror_tls_dir }}/ca.pem"
+        csr_path: "{{ mirror_tls_dir }}/ca.csr"
+        privatekey_path: "{{ mirror_tls_dir }}/ca.key"
+        provider: selfsigned
+        selfsigned_not_after: +3650d
+
+    - name: Create the server key
+      community.crypto.openssl_privatekey:
+        path: "{{ mirror_tls_dir }}/server.key"
+        type: ECC
+        curve: secp256r1
+
+    - name: Create the server request
+      community.crypto.openssl_csr:
+        path: "{{ mirror_tls_dir }}/server.csr"
+        privatekey_path: "{{ mirror_tls_dir }}/server.key"
+        common_name: "{{ mirror_name }}"
+        subject_alt_name:
+          - "DNS:{{ mirror_name }}"
+          - "IP:{{ ip }}"
+        extended_key_usage: [serverAuth]
+
+    - name: Issue the server certificate
+      community.crypto.x509_certificate:
+        path: "{{ mirror_tls_dir }}/server.pem"
+        csr_path: "{{ mirror_tls_dir }}/server.csr"
+        provider: ownca
+        ownca_path: "{{ mirror_tls_dir }}/ca.pem"
+        ownca_privatekey_path: "{{ mirror_tls_dir }}/ca.key"
+        ownca_not_after: +825d
+      notify: reload nginx
+
+    - name: Copy the synced artifacts
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/.mirror/teleport/"
+        dest: "{{ mirror_root }}/"
+        owner: root
+        group: root
+        mode: "0644"
+        directory_mode: "0755"
+
+    - name: Configure the site
+      ansible.builtin.copy:
+        dest: /etc/nginx/sites-available/teleport-mirror
+        mode: "0644"
+        content: |
+          server {
+              listen 443 ssl;
+              server_name {{ mirror_name }} {{ ip }};
+              ssl_certificate     {{ mirror_tls_dir }}/server.pem;
+              ssl_certificate_key {{ mirror_tls_dir }}/server.key;
+              access_log /var/log/nginx/teleport-mirror.log;
+              location /teleport/ {
+                  alias {{ mirror_root }}/;
+                  autoindex on;
+              }
+          }
+      notify: reload nginx
+
+    - name: Enable the site
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/teleport-mirror
+        path: /etc/nginx/sites-enabled/teleport-mirror
+        state: link
+      notify: reload nginx
+
+    - name: Drop the default site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: reload nginx
+
+    - name: Start nginx
+      ansible.builtin.systemd_service:
+        name: nginx
+        enabled: true
+        state: started
+
+    - name: Fetch the CA certificate for the fleet
+      ansible.builtin.fetch:
+        src: "{{ mirror_tls_dir }}/ca.pem"
+        dest: "{{ playbook_dir }}/.mirror/ca.pem"
+        flat: true
+
+  handlers:
+    - name: reload nginx
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: reloaded

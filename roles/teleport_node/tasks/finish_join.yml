@@ -1,0 +1,92 @@
+---
+# After the agents start: wait once for the whole fleet to register, then per host
+# remove the one-time secret, prove the token is bound to that host, and remove the
+# token. Runs in a linear play so the run_once tasks see every host.
+- name: List the hosts that joined in this run
+  ansible.builtin.set_fact:
+    teleport_joined_hosts: >-
+      {{ ansible_play_hosts
+         | map('extract', hostvars)
+         | selectattr('teleport_joined_this_run', 'defined')
+         | map(attribute='inventory_hostname')
+         | list }}
+  run_once: true
+
+- name: Nothing joined in this run
+  ansible.builtin.meta: end_play
+  when: teleport_joined_hosts | length == 0
+
+# The agent inventory lists every connected agent regardless of the caller's roles,
+# so it is the reliable signal. `tctl nodes ls` and `tsh ls` only show nodes the
+# caller's roles can access.
+- name: Wait for every joining host to appear in the agent inventory
+  ansible.builtin.command: "{{ teleport_tctl }} inventory ls --format=json --services node"
+  register: teleport_registration
+  delegate_to: localhost
+  become: false
+  run_once: true
+  changed_when: false
+  retries: 24
+  delay: 5
+  until: >-
+    teleport_registration.rc == 0 and
+    (teleport_joined_hosts | map('extract', hostvars, 'teleport_node_name_fact')
+     | difference(teleport_registration.stdout | from_json | map(attribute='spec.hostname'))) | length == 0
+  ignore_errors: true
+
+- name: Collect the agent log where registration did not happen
+  ansible.builtin.command: journalctl -u teleport -n 60 --no-pager
+  register: teleport_journal
+  changed_when: false
+  failed_when: false
+  when: >-
+    teleport_joined_this_run is defined and
+    teleport_nodename_effective not in (teleport_registration.stdout | default('[]') | from_json | map(attribute='spec.hostname') | list)
+
+- name: Fail the hosts that did not register
+  ansible.builtin.fail:
+    msg: |
+      {{ teleport_nodename_effective }} ({{ teleport_host_uuid }}) did not register within 2 minutes.
+      Token: {{ teleport_join_token_name }}
+      {{ teleport_journal.stdout | default('no journal output') }}
+  when: teleport_journal is not skipped
+
+# The secret was needed exactly once. The agent restarts from <data_dir>/proc and
+# only reads this file when no stored identity exists, so removing it is safe.
+- name: Remove the one-time join secret
+  ansible.builtin.file:
+    path: "{{ teleport_data_dir }}/registration-secret"
+    state: absent
+  when: teleport_joined_this_run is defined
+
+- name: Read the tokens back
+  ansible.builtin.command: >-
+    {{ teleport_tctl }} get
+    {{ teleport_joined_hosts | map('extract', hostvars, 'teleport_join_token_name') | map('regex_replace', '^', 'token/') | join(',') }}
+    --format=yaml
+  register: teleport_tokens_after
+  delegate_to: localhost
+  become: false
+  run_once: true
+  changed_when: false
+
+- name: Assert every token is bound to the host that joined with it
+  ansible.builtin.assert:
+    that: >-
+      (teleport_tokens_after.stdout | from_yaml_all | list
+       | selectattr('metadata.name', 'equalto', hostvars[item].teleport_join_token_name)
+       | first).status.bound_keypair.bound_host_id == hostvars[item].teleport_host_uuid
+    fail_msg: "Token {{ hostvars[item].teleport_join_token_name }} is not bound to {{ item }}'s UUID"
+    quiet: true
+  loop: "{{ teleport_joined_hosts }}"
+  run_once: true
+
+- name: Remove the used tokens
+  ansible.builtin.command: "{{ teleport_tctl }} tokens rm {{ hostvars[item].teleport_join_token_name }}"
+  loop: "{{ teleport_joined_hosts }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  register: teleport_revoke
+  changed_when: teleport_revoke.rc == 0
+  failed_when: teleport_revoke.rc != 0 and 'not found' not in (teleport_revoke.stderr | lower)

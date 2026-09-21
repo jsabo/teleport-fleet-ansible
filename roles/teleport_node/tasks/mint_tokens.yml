@@ -1,0 +1,59 @@
+---
+# One bound_keypair token per joining host, created in a single `tctl create`
+# (multi-document YAML on stdin, never written to disk) and read back with a single
+# `tctl get --with-secrets`.
+- name: Choose a token name for this host
+  ansible.builtin.set_fact:
+    teleport_join_token_name: "node-{{ teleport_nodename_effective }}-{{ '%08x' | format(4294967295 | random) }}"
+  when: teleport_needs_join
+
+- name: List the hosts that need a token
+  ansible.builtin.set_fact:
+    teleport_mint_hosts: >-
+      {{ ansible_play_hosts
+         | map('extract', hostvars)
+         | selectattr('teleport_needs_join', 'defined')
+         | selectattr('teleport_needs_join')
+         | map(attribute='inventory_hostname')
+         | list }}
+    teleport_token_expires: >-
+      {{ '%Y-%m-%dT%H:%M:%SZ' | strftime((now(utc=true).timestamp() | int) + (teleport_token_ttl_seconds | int), utc=true) }}
+  run_once: true
+
+- name: Report
+  ansible.builtin.debug:
+    msg: "{{ teleport_mint_hosts | length }} host(s) need a token: {{ teleport_mint_hosts | join(', ') if teleport_mint_hosts else 'none' }}"
+  run_once: true
+
+# The documents hold names and expiry only; the server generates the secrets.
+- name: Create the tokens
+  ansible.builtin.command: "{{ teleport_tctl }} create"
+  args:
+    stdin: "{{ lookup('template', 'tokens.yaml.j2') }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  changed_when: true
+  when: teleport_mint_hosts | length > 0
+
+- name: Read the registration secrets
+  ansible.builtin.command: >-
+    {{ teleport_tctl }} get
+    {{ teleport_mint_hosts | map('extract', hostvars, 'teleport_join_token_name') | map('regex_replace', '^', 'token/') | join(',') }}
+    --with-secrets --format=yaml
+  register: teleport_tokens_yaml
+  delegate_to: localhost
+  become: false
+  run_once: true
+  no_log: true
+  changed_when: false
+  when: teleport_mint_hosts | length > 0
+
+- name: Hand this host its secret
+  ansible.builtin.set_fact:
+    teleport_join_secret: >-
+      {{ (teleport_tokens_yaml.stdout | from_yaml_all | list
+          | selectattr('metadata.name', 'equalto', teleport_join_token_name)
+          | first).status.bound_keypair.registration_secret }}
+  no_log: true
+  when: teleport_needs_join

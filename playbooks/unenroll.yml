@@ -1,0 +1,33 @@
+---
+# Unenrol. Play 1 rides Teleport and brings OpenSSH back. Play 2 rides OpenSSH and
+# is gated by that connection working: if OpenSSH is not reachable, Teleport stays.
+- import_playbook: _teleport-transport.yml
+
+- name: Unenrol 1 — reopen OpenSSH (Teleport transport)
+  hosts: "{{ target | default('nodes') }}"
+  vars_files:
+    - ../vars/transport-teleport.yml
+  gather_facts: true
+  gather_subset: [min]
+  become: true
+  tasks:
+    - name: Re-enable OpenSSH and record the host UUID
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: unenroll_reopen
+
+- name: Unenrol 2 — remove Teleport (OpenSSH transport)
+  hosts: "{{ target | default('nodes') }}"
+  vars_files:
+    - ../vars/transport-openssh.yml
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Wait for OpenSSH
+      ansible.builtin.wait_for_connection:
+        timeout: 60
+
+    - name: Remove the agent and the node record
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: unenroll_remove

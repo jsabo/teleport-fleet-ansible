@@ -1,0 +1,30 @@
+---
+# Preflight over OpenSSH. Play 1 is linear so the once-per-fleet checks (controller
+# login, duplicate names, artifact resolution) reach every host; play 2 runs the
+# per-host checks in parallel and drops failing hosts without stopping the rest.
+- name: Preflight (fleet-wide checks)
+  hosts: "{{ target | default('nodes') }}"
+  vars_files:
+    - ../vars/transport-openssh.yml
+  gather_facts: true
+  gather_subset: [min, hardware]
+  become: true
+  tasks:
+    - name: Fleet-wide checks
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: preflight_controller
+
+- name: Preflight (per-host checks)
+  hosts: "{{ target | default('nodes') }}"
+  vars_files:
+    - ../vars/transport-openssh.yml
+  gather_facts: true
+  gather_subset: [min, hardware]
+  strategy: free
+  become: true
+  tasks:
+    - name: Per-host checks
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: preflight

@@ -1,0 +1,9 @@
+---
+# ansible-galaxy collection install -r requirements.yml
+collections:
+  - name: ansible.posix          # profile_tasks/timer callbacks, synchronize
+    version: ">=1.5.0"
+  - name: community.general      # terraform module (optional lab/proxmox)
+    version: ">=8.0.0"
+  - name: community.crypto       # private CA for the optional lab mirror
+    version: ">=2.0.0"

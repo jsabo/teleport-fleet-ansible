@@ -1,0 +1,57 @@
+---
+# Example inventory. Copy it anywhere and pass it with -i. The shape:
+#   - a host is reached over OpenSSH at its `ip:` if set, otherwise at its inventory name
+#   - never set ansible_host; vars/transport-*.yml derive it per phase
+#   - the inventory name becomes the Teleport node name and must equal the machine's
+#     hostname, unless teleport_nodename is set
+#   - any Ansible inventory format works (this is YAML; INI or a dynamic source is fine)
+#
+# Password-based fleets: drop ansible_ssh_private_key_file and run with
+# `--ask-pass --ask-become-pass` (needs sshpass on the controller), or put
+# ansible_password / ansible_become_password in an ansible-vault file.
+#
+# Every other variable has a default in roles/teleport_node/defaults/main.yml.
+all:
+  vars:
+    teleport_proxy: example.teleport.sh:443
+    teleport_cluster_name: example.teleport.sh
+    # OpenSSH phase
+    ansible_user: ansible
+    ansible_ssh_private_key_file: ~/.ssh/id_ed25519
+    # Login used through Teleport (verify, harden, labels, unenroll). It must exist
+    # on the hosts and be granted by your Teleport role.
+    teleport_ssh_login: root
+    # teleport_update_group: staging
+    # teleport_download_base_url: https://mirror.example.internal/teleport
+    # teleport_download_ca_cert: /path/to/mirror-ca.pem
+    # teleport_enhanced_recording: true
+  children:
+    nodes:
+      children:
+        dc1:
+          vars:
+            teleport_trust_labels:
+              env: prod
+              site: dc1
+          hosts:
+            web-01:
+              ip: 10.0.1.11
+            web-02:
+              ip: 10.0.1.12
+            db-01:
+              ip: 10.0.1.21
+              ansible_user: rocky           # per-host OpenSSH login
+              teleport_class_labels:        # per-host classification
+                team: data
+                service: postgres
+                tier: internal
+                lifecycle: provisioning
+                onboarded-by: ansible
+        lab:
+          vars:
+            teleport_trust_labels:
+              env: lab
+              site: hq
+          hosts:
+            lab-01:
+              ip: 10.0.9.11

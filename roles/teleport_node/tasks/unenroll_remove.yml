@@ -1,0 +1,35 @@
+---
+# Second half of unenroll, over OpenSSH. Reaching the host at all is the gate: if
+# OpenSSH did not come back, this play never runs and Teleport stays.
+- name: Stop and disable the agent (teleport-update refuses to uninstall while it runs)
+  ansible.builtin.systemd_service:
+    name: teleport
+    state: stopped
+    enabled: false
+  failed_when: false
+
+- name: Remove Teleport and the updater
+  ansible.builtin.command: /usr/local/bin/teleport-update uninstall --force
+  args:
+    removes: /usr/local/bin/teleport-update
+
+- name: Remove configuration and data
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: >-
+    {{ ['/etc/teleport.yaml', '/etc/systemd/system/teleport.service.d']
+       + ([teleport_data_dir] if teleport_unenroll_purge_data | bool else []) }}
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Delete the node record from the cluster
+  ansible.builtin.command: "{{ teleport_tctl }} rm node/{{ teleport_host_uuid }}"
+  delegate_to: localhost
+  become: false
+  register: teleport_node_rm
+  changed_when: teleport_node_rm.rc == 0
+  failed_when: teleport_node_rm.rc != 0 and 'not found' not in (teleport_node_rm.stderr | lower)
+  when: teleport_host_uuid is defined

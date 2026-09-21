@@ -1,0 +1,22 @@
+---
+# Harden through Teleport: stop and disable OpenSSH, in batches. A host that is not
+# reachable through Teleport is skipped by construction and keeps OpenSSH.
+- import_playbook: _teleport-transport.yml
+
+- name: Harden (Teleport transport)
+  hosts: "{{ target | default('nodes') }}"
+  vars_files:
+    - ../vars/transport-teleport.yml
+  gather_facts: true
+  gather_subset: [min]
+  become: true
+  serial:
+    - 2
+    - 10
+    - "25%"
+  max_fail_percentage: 10
+  tasks:
+    - name: Disable OpenSSH
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: harden_sshd

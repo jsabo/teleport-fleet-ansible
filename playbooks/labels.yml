@@ -1,0 +1,25 @@
+---
+# Reclassify hosts through Teleport: change classification labels (team, service,
+# tier, lifecycle) and reload the agent. To move a host between environments or
+# sites (env, site), re-enrol it instead.
+#
+#   ansible-playbook playbooks/labels.yml --limit web-01 \
+#     -e '{"teleport_class_labels":{"team":"payments","service":"api","tier":"internal","lifecycle":"active","onboarded-by":"ansible"}}'
+- import_playbook: _teleport-transport.yml
+
+- name: Reclassify (Teleport transport)
+  hosts: "{{ target | default('nodes') }}"
+  vars_files:
+    - ../vars/transport-teleport.yml
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Detect join state
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: needs_join
+
+    - name: Write the configuration (reload on change)
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: configure

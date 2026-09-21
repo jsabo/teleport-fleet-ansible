@@ -1,0 +1,19 @@
+# systemd unit for the controller's tbot. Install with:
+#   sudo cp controller/tbot.service /etc/systemd/system/tbot.service
+#   sudo cp controller/tbot.yaml /etc/tbot.yaml   # after filling in proxy + secret
+#   sudo systemctl enable --now tbot
+# Adjust WorkingDirectory to the checkout so ./controller/tbot-out resolves.
+[Unit]
+Description=Teleport Machine ID (fleet onboarding controller)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/teleport-fleet-ansible
+ExecStart=/usr/local/bin/tbot start -c /etc/tbot.yaml
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

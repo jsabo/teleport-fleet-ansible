@@ -1,0 +1,5 @@
+---
+# Fresh VMs: remove the current fleet, then create it again.
+#   ansible-playbook -i inventory/lab.yml lab/proxmox/reset.yml [-e lab_mirror=true]
+- import_playbook: down.yml
+- import_playbook: up.yml

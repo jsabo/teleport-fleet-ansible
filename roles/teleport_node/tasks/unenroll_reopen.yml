@@ -1,0 +1,23 @@
+---
+# First half of unenroll, over Teleport: bring OpenSSH back before anything is
+# removed, and remember the host UUID for the cluster-side cleanup.
+- name: Enable and start OpenSSH again
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop: "{{ teleport_node_sshd_units[ansible_facts['os_family']] }}"
+  register: teleport_sshd_enable
+  failed_when: teleport_sshd_enable is failed and 'Could not find' not in (teleport_sshd_enable.msg | default(''))
+  changed_when: teleport_sshd_enable is changed
+
+- name: Read the host UUID
+  ansible.builtin.slurp:
+    src: "{{ teleport_data_dir }}/host_uuid"
+  register: teleport_host_uuid_raw
+  failed_when: false
+
+- name: Record the host UUID
+  ansible.builtin.set_fact:
+    teleport_host_uuid: "{{ teleport_host_uuid_raw.content | b64decode | trim }}"
+  when: teleport_host_uuid_raw.content is defined

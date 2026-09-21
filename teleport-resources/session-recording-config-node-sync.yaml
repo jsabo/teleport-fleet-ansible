@@ -1,0 +1,24 @@
+# REFERENCE ONLY. Cluster-wide setting; apply deliberately, not from a playbook:
+#   tctl create -f teleport-resources/session-recording-config-node-sync.yaml
+#
+# Why: in the default `node` mode the agent buffers a session recording on the
+# node's own disk (<data_dir>/log/upload/streaming/) and uploads it afterwards. A
+# root user on that node can delete or edit the file before it leaves. `node-sync`
+# streams the recording to the Auth Service as it happens, so tampering is limited
+# to cutting the stream, which is itself visible. `proxy-sync` moves recording off
+# the node entirely (the proxy re-dials the node as the user; agent forwarding is
+# then required).
+#
+# Pair with a role option so a broken recorder ends the session instead of letting
+# it continue unrecorded:
+#   spec:
+#     options:
+#       record_session:
+#         ssh: strict
+kind: session_recording_config
+version: v2
+metadata:
+  name: session-recording-config
+spec:
+  mode: node-sync
+  proxy_checks_host_keys: true

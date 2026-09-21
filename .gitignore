@@ -1,0 +1,17 @@
+# Ansible runtime
+*.retry
+
+# Controller identity material (operator ssh config, bot config and outputs)
+controller/.tsh-ssh.cfg
+controller/tbot.local.yaml
+controller/.tbot-store/
+controller/tbot-out/
+
+# Generated lab inventory and lab secrets
+inventory/lab.yml
+lab/proxmox/vars.yml
+lab/proxmox/terraform.tfvars
+lab/proxmox/.terraform/
+lab/proxmox/terraform.tfstate
+lab/proxmox/terraform.tfstate.backup
+lab/proxmox/.mirror/

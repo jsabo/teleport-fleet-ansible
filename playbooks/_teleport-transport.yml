@@ -1,0 +1,17 @@
+---
+# Shared first play for every playbook that connects through Teleport: check the
+# controller's login and write the ssh config the transport needs. Nothing here
+# touches a remote host.
+- name: Prepare the Teleport transport
+  hosts: "{{ target | default('nodes') }}"
+  gather_facts: false
+  tasks:
+    - name: Check the controller identity
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: controller_guard
+
+    - name: Write the ssh config
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: ssh_config

@@ -1,0 +1,21 @@
+{# One token per joining host, as a multi-document stream for a single `tctl create`. #}
+{% for h in teleport_mint_hosts %}
+---
+kind: token
+version: v2
+metadata:
+  name: {{ hostvars[h].teleport_join_token_name }}
+  expires: "{{ teleport_token_expires }}"
+spec:
+  roles: [Node]
+  join_method: bound_keypair
+  bound_keypair:
+    onboarding:
+      # The server generates the registration secret; it is refused after this time.
+      must_register_before: "{{ teleport_token_expires }}"
+    recovery:
+      # The first join counts as one recovery, so a copied keypair on a second
+      # machine is refused and leaves an audit trail.
+      limit: 1
+      mode: standard
+{% endfor %}

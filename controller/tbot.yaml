@@ -1,0 +1,33 @@
+# tbot configuration for a headless controller (teleport_controller_identity: bot).
+#
+# Apply teleport-resources/bot-fleet-onboarder.yaml first, then read the one-time
+# registration secret:
+#   tctl get token/fleet-onboarder-bound-keypair --with-secrets --format=json \
+#     | jq -r '.[0].status.bound_keypair.registration_secret'
+# Put it in `registration_secret` below (or a file via registration_secret_path),
+# start tbot, and remove it after the first join: from then on the keypair in
+# `storage` is the identity.
+#
+# Copy to controller/tbot.local.yaml (gitignored) with the real values and run
+# `tbot start -c controller/tbot.local.yaml` from the repo root. Outputs land in
+# controller/tbot-out/: `identity` (for tctl --identity / tsh -i) and `ssh_config`
+# (for the Teleport transport, vars/transport-teleport.yml).
+version: v2
+proxy_server: example.teleport.sh:443
+
+onboarding:
+  join_method: bound_keypair
+  token: fleet-onboarder-bound-keypair
+  bound_keypair:
+    registration_secret: ""
+
+storage:
+  type: directory
+  path: ./controller/.tbot-store
+
+services:
+  - type: identity
+    destination:
+      type: directory
+      path: ./controller/tbot-out
+    ssh_config: "on"

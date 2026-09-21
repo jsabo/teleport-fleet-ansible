@@ -1,0 +1,94 @@
+---
+# Per-host checks. Each assert names the host and the reason; a failing host is
+# dropped from the run while the rest continue.
+- name: Assert systemd is the service manager
+  ansible.builtin.assert:
+    that: ansible_facts['service_mgr'] == 'systemd'
+    fail_msg: "teleport-update (Managed Updates v2) needs systemd; this host runs {{ ansible_facts['service_mgr'] }}"
+
+- name: Assert the CPU architecture has a Teleport build
+  ansible.builtin.assert:
+    that: ansible_facts['architecture'] in teleport_node_arch_map
+    fail_msg: "No Teleport Linux build for {{ ansible_facts['architecture'] }}"
+
+- name: Assert the node name is usable
+  ansible.builtin.assert:
+    that:
+      - teleport_nodename_effective is match('^[a-z0-9][a-z0-9.-]{0,62}$')
+      - teleport_nodename_effective != 'localhost'
+      - teleport_nodename is defined or ansible_facts['hostname'] == inventory_hostname
+    fail_msg: >-
+      Node name "{{ teleport_nodename_effective }}" is not usable. The machine's hostname is
+      "{{ ansible_facts['hostname'] }}"; either rename the inventory entry to match or set teleport_nodename.
+
+- name: Measure clock skew against the controller
+  ansible.builtin.set_fact:
+    teleport_clock_skew_s: "{{ (ansible_facts['date_time']['epoch'] | int) - (now().timestamp() | int) }}"
+
+- name: Assert the clock is within tolerance (certificates depend on it)
+  ansible.builtin.assert:
+    that: (teleport_clock_skew_s | int | abs) <= (teleport_preflight_max_skew_s | int)
+    fail_msg: "Clock is {{ teleport_clock_skew_s }}s off the controller (limit {{ teleport_preflight_max_skew_s }}s). Fix time sync first."
+
+# Filesystems that can hold /opt (the install) and /var/lib (the data dir).
+- name: Assert there is room for the install
+  ansible.builtin.assert:
+    that: >-
+      ((ansible_facts['mounts'] | selectattr('mount', 'in', ['/', '/opt', '/var', '/var/lib'])
+        | map(attribute='size_available') | min) / 1048576) >= (teleport_preflight_min_free_mb | int)
+    fail_msg: "Less than {{ teleport_preflight_min_free_mb }} MB free under /opt or /var/lib"
+
+# One managed block: entries not listed any more (for example after leaving mirror
+# mode) disappear on the next run.
+- name: Manage /etc/hosts entries
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: "# {mark} teleport-fleet-ansible"
+    block: |
+      {% for e in teleport_hosts_entries %}
+      {{ e.ip }} {{ e.name }}
+      {% endfor %}
+
+- name: Install the download mirror's CA certificate
+  ansible.builtin.copy:
+    src: "{{ teleport_download_ca_cert }}"
+    dest: "{{ teleport_node_ca_dir[ansible_facts['os_family']] }}/teleport-download-mirror.crt"
+    owner: root
+    group: root
+    mode: "0644"
+  register: teleport_mirror_ca
+  when: teleport_download_ca_cert | length > 0
+
+- name: Refresh the system trust store
+  ansible.builtin.command: "{{ teleport_node_ca_update_cmd[ansible_facts['os_family']] }}"
+  when: teleport_mirror_ca is changed
+
+- name: Reach the Teleport proxy from this host
+  ansible.builtin.uri:
+    url: "https://{{ teleport_proxy }}/webapi/ping"
+    return_content: true
+  register: teleport_ping
+  changed_when: false
+  retries: 3
+  delay: 5
+  until: teleport_ping is succeeded
+
+- name: Assert the cluster is a supported version
+  ansible.builtin.assert:
+    that: teleport_ping.json.server_version is version('18.0.0', '>=')
+    fail_msg: "Cluster reports {{ teleport_ping.json.server_version }}; this repo targets 18.x"
+
+# HEAD on the .sha256 of both artifacts: proves the download source (CDN or mirror)
+# has the exact version the cluster advertises, not just that it answers.
+- name: Confirm the download source has the advertised artifacts
+  ansible.builtin.uri:
+    url: "{{ item }}.sha256"
+    method: HEAD
+  loop:
+    - "{{ teleport_updater_tarball_url }}"
+    - "{{ teleport_tarball_url }}"
+  register: teleport_artifact_head
+  changed_when: false
+  retries: 3
+  delay: 5
+  until: teleport_artifact_head is succeeded

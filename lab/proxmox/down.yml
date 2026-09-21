@@ -1,0 +1,74 @@
+---
+# Remove the lab fleet: stop the agents, destroy the VMs, remove their node records,
+# drop the generated inventory.
+#   ansible-playbook -i inventory/lab.yml lab/proxmox/down.yml
+#
+# The agents are stopped first, through Teleport, so their control streams close.
+# While the Auth Service still believes an agent is connected it re-creates the node
+# record that `tctl rm` deletes, and a stale record with the same name would make
+# `tsh ssh <name>` ambiguous for the next fleet. Hosts that cannot be reached (a fleet
+# that never enrolled) are skipped.
+- import_playbook: ../../playbooks/_teleport-transport.yml
+
+- name: Stop the agents (Teleport transport)
+  hosts: nodes
+  vars_files:
+    - ../../vars/transport-teleport.yml
+  gather_facts: false
+  become: true
+  ignore_unreachable: true
+  tasks:
+    # This session runs through the very agent being stopped, so the stop is scheduled
+    # a few seconds ahead with a transient systemd timer and the session ends cleanly.
+    - name: Schedule the agent to stop in 5 seconds
+      ansible.builtin.command: systemd-run --on-active=5 --unit=lab-teleport-stop systemctl stop teleport
+      changed_when: true
+      failed_when: false
+
+- name: Let the agents shut down before the VMs disappear
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Wait for the agents to close their connections
+      ansible.builtin.pause:
+        seconds: 20
+
+- name: Destroy the lab VMs
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - vars.yml
+  tasks:
+    - name: Destroy the Terraform stack
+      community.general.terraform:
+        project_path: "{{ playbook_dir }}"
+        state: absent
+        complex_vars: true
+        variables:
+          proxmox_endpoint: "{{ proxmox_endpoint }}"
+          proxmox_api_token: "{{ proxmox_api_token }}"
+          proxmox_node: "{{ proxmox_node }}"
+          ssh_public_key: "{{ lookup('file', ssh_public_key_file | expanduser) | trim }}"
+          mirror_enabled: "{{ lab_mirror | default(false) | bool }}"
+      no_log: true
+
+    - name: Confirm nothing is left in the Terraform state
+      ansible.builtin.command: terraform -chdir={{ playbook_dir }} state list
+      register: lab_state
+      changed_when: false
+
+    - name: Assert the state is empty
+      ansible.builtin.assert:
+        that: lab_state.stdout | trim | length == 0
+        fail_msg: "Terraform state still lists: {{ lab_state.stdout_lines }}"
+
+    - name: Remove the lab's node records
+      ansible.builtin.include_tasks: tasks/remove-node-records.yml
+      loop: [1, 2, 3, 4, 5, 6]
+      loop_control:
+        loop_var: lab_attempt
+
+    - name: Drop the generated inventory
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/../../inventory/lab.yml"
+        state: absent

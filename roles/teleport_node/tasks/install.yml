@@ -1,0 +1,77 @@
+---
+# Install through teleport-update (Managed Updates v2). The small updater tarball is
+# downloaded once to get the `teleport-update` binary; `teleport-update enable` then
+# downloads the full agent tarball for the advertised version, installs it, writes
+# teleport.service and a 5-minute timer that follows the cluster's rollout. It does
+# not start the service.
+- name: Read the updater status
+  ansible.builtin.command: /usr/local/bin/teleport-update status
+  register: teleport_update_status
+  changed_when: false
+  failed_when: false
+
+- name: Decide whether the updater is already set up the way we want
+  ansible.builtin.set_fact:
+    teleport_updater_ok: >-
+      {{ teleport_update_status.rc == 0
+         and (teleport_update_status.stdout | from_yaml).enabled | default(false)
+         and (teleport_update_status.stdout | from_yaml).group | default('default') == teleport_update_group
+         and (teleport_update_status.stdout | from_yaml).base_url | default('') == teleport_expected_status_base_url }}
+
+- name: Bootstrap teleport-update
+  when: teleport_update_status.rc != 0
+  block:
+    - name: Create a bootstrap directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: -teleport-bootstrap
+      register: teleport_bootstrap
+
+    - name: Download the updater tarball (checksum verified against its .sha256)
+      ansible.builtin.get_url:
+        url: "{{ teleport_updater_tarball_url }}"
+        dest: "{{ teleport_bootstrap.path }}/{{ teleport_updater_tarball }}"
+        checksum: "sha256:{{ teleport_updater_tarball_url }}.sha256"
+        mode: "0644"
+        timeout: 60
+      register: teleport_download
+      retries: 5
+      delay: 10
+      until: teleport_download is succeeded
+
+    - name: Extract teleport-update
+      ansible.builtin.unarchive:
+        src: "{{ teleport_bootstrap.path }}/{{ teleport_updater_tarball }}"
+        dest: "{{ teleport_bootstrap.path }}"
+        remote_src: true
+        include:
+          - teleport/teleport-update
+
+    - name: Enable Managed Updates (installs the advertised version, writes teleport.service)
+      ansible.builtin.command: >-
+        {{ teleport_bootstrap.path }}/teleport/teleport-update enable
+        --proxy {{ teleport_proxy }} --group {{ teleport_update_group }} {{ teleport_base_url_flag }}
+      changed_when: true
+  always:
+    - name: Remove the bootstrap directory
+      ansible.builtin.file:
+        path: "{{ teleport_bootstrap.path }}"
+        state: absent
+      when: teleport_bootstrap.path is defined
+
+- name: Re-point the updater (group or base URL changed)
+  ansible.builtin.command: >-
+    /usr/local/bin/teleport-update enable
+    --proxy {{ teleport_proxy }} --group {{ teleport_update_group }} {{ teleport_base_url_flag }}
+  when: teleport_update_status.rc == 0 and not (teleport_updater_ok | bool)
+  changed_when: true
+
+- name: Confirm the teleport binary is in place
+  ansible.builtin.stat:
+    path: /usr/local/bin/teleport
+  register: teleport_bin
+
+- name: Assert the install produced a binary
+  ansible.builtin.assert:
+    that: teleport_bin.stat.exists
+    fail_msg: "/usr/local/bin/teleport is missing after teleport-update enable"

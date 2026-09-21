@@ -1,0 +1,5 @@
+---
+# This role is always used with `tasks_from:`; the playbooks pick the phase.
+- name: Refuse to run the role without tasks_from
+  ansible.builtin.fail:
+    msg: "Use import_role/include_role with tasks_from: preflight | install | configure | join | verify | harden_sshd | ..."

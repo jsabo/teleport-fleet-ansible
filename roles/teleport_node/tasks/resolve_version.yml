@@ -1,0 +1,40 @@
+---
+# Which artifacts to install: the version, edition and FIPS flag the cluster
+# advertises (the same answer teleport-update gets on every check).
+# Two tarballs are involved: the small `teleport-update-*` tarball the playbook
+# downloads to bootstrap the updater, and the full agent tarball that
+# `teleport-update enable` downloads itself.
+- name: Ask the cluster which agent version it advertises
+  ansible.builtin.uri:
+    url: "https://{{ teleport_proxy }}/v1/webapi/find"
+    return_content: true
+  register: teleport_find
+  delegate_to: localhost
+  become: false
+  run_once: true
+  changed_when: false
+  retries: 3
+  delay: 5
+  until: teleport_find is succeeded
+
+- name: Work out the artifacts for this host
+  ansible.builtin.set_fact:
+    teleport_pkg_version: >-
+      {{ teleport_version if teleport_version | length > 0
+         else teleport_find.json.auto_update.agent_version | default(teleport_find.json.server_version) }}
+    teleport_pkg_name: >-
+      {{ 'teleport-ent' if (teleport_edition if teleport_edition | length > 0 else teleport_find.json.edition) == 'ent'
+         else 'teleport' }}
+    teleport_pkg_fips: "{{ teleport_find.json.fips | default(false) }}"
+    teleport_pkg_arch: "{{ teleport_node_arch_map[ansible_facts['architecture']] }}"
+
+- name: Name the tarballs
+  ansible.builtin.set_fact:
+    teleport_tarball: >-
+      {{ teleport_pkg_name }}-v{{ teleport_pkg_version }}-linux-{{ teleport_pkg_arch }}{{ '-fips' if teleport_pkg_fips | bool else '' }}-bin.tar.gz
+    teleport_updater_tarball: "teleport-update-v{{ teleport_pkg_version }}-linux-{{ teleport_pkg_arch }}-bin.tar.gz"
+
+- name: Finish the URLs
+  ansible.builtin.set_fact:
+    teleport_tarball_url: "{{ teleport_download_base_url_clean }}/{{ teleport_tarball }}"
+    teleport_updater_tarball_url: "{{ teleport_download_base_url_clean }}/{{ teleport_updater_tarball }}"

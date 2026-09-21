@@ -1,0 +1,15 @@
+---
+# Verify through Teleport. Read-only: a clean run reports changed=0.
+- import_playbook: _teleport-transport.yml
+
+- name: Verify (Teleport transport)
+  hosts: "{{ target | default('nodes') }}"
+  vars_files:
+    - ../vars/transport-teleport.yml
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Verify
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: verify

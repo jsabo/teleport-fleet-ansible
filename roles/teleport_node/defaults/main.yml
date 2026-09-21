@@ -1,0 +1,89 @@
+---
+# ── Cluster ───────────────────────────────────────────────────────────────────
+teleport_proxy: example.teleport.sh:443
+teleport_cluster_name: "{{ teleport_proxy | regex_replace(':\\d+$', '') }}"
+# Managed Updates group the agent reports. Unknown names fall back to the cluster's
+# last configured group.
+teleport_update_group: default
+# Where the agent tarball, its .sha256 and its .sig are fetched from, now and on
+# every future update. Must be https. See docs/mirror.md for running a mirror.
+teleport_download_base_url: https://cdn.teleport.dev
+# PEM file on the controller (absolute path), installed into the hosts' trust store
+# when the mirror uses a private CA. Empty = nothing to install.
+teleport_download_ca_cert: ""
+# Leave empty to install what the cluster advertises. Pin only when the controller
+# cannot reach the proxy.
+teleport_version: ""
+teleport_edition: ""          # "" | ent | oss
+teleport_data_dir: /var/lib/teleport
+# Extra /etc/hosts lines written in preflight (for example a mirror name).
+teleport_hosts_entries: []
+
+# ── Join ──────────────────────────────────────────────────────────────────────
+# One bound_keypair token per host: bound to that host at first join, secret used
+# once, removed after the join; this expiry only matters if a run aborts first.
+teleport_token_ttl_seconds: 900
+# Wipe the stored identity and join again with a fresh token.
+teleport_force_rejoin: false
+
+# ── Controller ────────────────────────────────────────────────────────────────
+# operator: tctl/tsh use the active `tsh login`.
+# bot: tctl/tsh use a tbot identity file (controller/tbot.yaml).
+teleport_controller_identity: operator
+teleport_identity_file: controller/tbot-out/identity
+# ssh config for the Teleport transport, relative to the repo root.
+teleport_ssh_config: "{{ 'controller/.tsh-ssh.cfg' if teleport_controller_identity == 'operator' else 'controller/tbot-out/ssh_config' }}"
+teleport_ssh_login: root
+teleport_repo_root: "{{ role_path }}/../.."
+teleport_tctl: >-
+  {{ 'tctl' if teleport_controller_identity == 'operator'
+     else 'tctl --identity ' ~ teleport_repo_root ~ '/' ~ teleport_identity_file ~ ' --auth-server ' ~ teleport_proxy }}
+teleport_tsh: >-
+  {{ 'tsh' if teleport_controller_identity == 'operator'
+     else 'tsh -i ' ~ teleport_repo_root ~ '/' ~ teleport_identity_file ~ ' --proxy ' ~ teleport_proxy }}
+
+# ── Node ──────────────────────────────────────────────────────────────────────
+# Teleport node name. Defaults to the inventory name, which preflight checks
+# against the machine's hostname unless teleport_nodename is set explicitly.
+teleport_nodename_effective: "{{ teleport_nodename | default(inventory_hostname) }}"
+
+# ── Labels (docs/labels.md) ───────────────────────────────────────────────────
+# Where the host sits. Change by re-enrolling.
+teleport_trust_labels:
+  env: lab
+  site: unknown
+# What the host is. Change with playbooks/labels.yml.
+teleport_class_labels:
+  team: unassigned
+  service: unassigned
+  tier: unclassified
+  lifecycle: provisioning
+  onboarded-by: ansible
+teleport_extra_labels: {}
+teleport_all_static_labels: "{{ teleport_trust_labels | combine(teleport_class_labels) | combine(teleport_extra_labels) }}"
+
+# ── ssh_service options ───────────────────────────────────────────────────────
+teleport_enhanced_recording: false      # BPF session.command / session.network events
+teleport_port_forwarding: false         # no TCP pivoting through the node
+teleport_ssh_file_copy: false           # no SCP/SFTP
+teleport_disable_create_host_user: true # logins must already exist on the host
+
+# ── Harden ────────────────────────────────────────────────────────────────────
+# disabled: stop and disable OpenSSH (unit files stay). untouched: leave it alone.
+teleport_sshd_mode: disabled
+
+# ── Preflight ─────────────────────────────────────────────────────────────────
+teleport_preflight_max_skew_s: 120
+teleport_preflight_min_free_mb: 1024
+
+# ── Unenroll ──────────────────────────────────────────────────────────────────
+teleport_unenroll_purge_data: true
+
+# ── Derived (do not override) ─────────────────────────────────────────────────
+teleport_download_base_url_clean: "{{ teleport_download_base_url | regex_replace('/+$', '') }}"
+teleport_base_url_flag: >-
+  {{ '' if teleport_download_base_url_clean == 'https://cdn.teleport.dev'
+     else '--base-url ' ~ teleport_download_base_url_clean }}
+# teleport-update status reports base_url as "" when the default CDN is in use.
+teleport_expected_status_base_url: >-
+  {{ '' if teleport_download_base_url_clean == 'https://cdn.teleport.dev' else teleport_download_base_url_clean }}

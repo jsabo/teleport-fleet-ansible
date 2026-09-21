@@ -1,0 +1,91 @@
+---
+# Create the lab fleet on Proxmox and write inventory/lab.yml.
+#   ansible-playbook lab/proxmox/up.yml [-e lab_mirror=true]
+- name: Create the lab VMs
+  hosts: localhost
+  gather_facts: false
+  vars_files:
+    - vars.yml
+  vars:
+    lab_mirror_name: fleet-mirror.lab
+  tasks:
+    # Records of an earlier lab fleet with the same names would make `tsh ssh <name>`
+    # ambiguous for the new one.
+    - name: Remove stale node records from an earlier lab fleet
+      ansible.builtin.include_tasks: tasks/remove-node-records.yml
+      loop: [1, 2, 3]
+      loop_control:
+        loop_var: lab_attempt
+
+    - name: Apply the Terraform stack
+      community.general.terraform:
+        project_path: "{{ playbook_dir }}"
+        state: present
+        force_init: true
+        complex_vars: true
+        variables:
+          proxmox_endpoint: "{{ proxmox_endpoint }}"
+          proxmox_api_token: "{{ proxmox_api_token }}"
+          proxmox_node: "{{ proxmox_node }}"
+          ssh_public_key: "{{ lookup('file', ssh_public_key_file | expanduser) | trim }}"
+          mirror_enabled: "{{ lab_mirror | default(false) | bool }}"
+      register: lab_tf
+      no_log: true
+
+    - name: Record the VMs
+      ansible.builtin.set_fact:
+        lab_vms: "{{ lab_tf.outputs.vms.value }}"
+        lab_mirror_ip: >-
+          {{ (lab_tf.outputs.vms.value | dict2items | selectattr('value.role', 'equalto', 'mirror')
+              | map(attribute='value.ip') | first) | default('') }}
+
+    - name: Show the fleet
+      ansible.builtin.debug:
+        msg: "{{ lab_vms | dict2items | map(attribute='key') | zip(lab_vms | dict2items | map(attribute='value.ip')) | map('join', ' = ') | list }}"
+
+    - name: Write inventory/lab.yml
+      ansible.builtin.template:
+        src: templates/inventory.yml.j2
+        dest: "{{ playbook_dir }}/../../inventory/lab.yml"
+        mode: "0644"
+
+    - name: Forget old host keys for these addresses
+      ansible.builtin.known_hosts:
+        name: "{{ item.value.ip }}"
+        state: absent
+      loop: "{{ lab_vms | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+    - name: Wait for SSH on every VM
+      ansible.builtin.wait_for:
+        host: "{{ item.value.ip }}"
+        port: 22
+        search_regex: OpenSSH
+        timeout: 600
+      loop: "{{ lab_vms | dict2items }}"
+      loop_control:
+        label: "{{ item.key }} {{ item.value.ip }}"
+
+    - name: Add the VMs to this run
+      ansible.builtin.add_host:
+        name: "{{ item.key }}"
+        groups: lab_fresh
+        ansible_host: "{{ item.value.ip }}"
+        ansible_user: ansible
+        ansible_ssh_private_key_file: "{{ ssh_private_key_file }}"
+        ansible_ssh_common_args: -o IdentitiesOnly=yes -o StrictHostKeyChecking=no
+      loop: "{{ lab_vms | dict2items }}"
+      loop_control:
+        label: "{{ item.key }}"
+
+- name: Confirm the VMs answer over OpenSSH
+  hosts: lab_fresh
+  gather_facts: false
+  tasks:
+    - name: Wait until cloud-init has finished the user setup
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: Ping
+      ansible.builtin.ping:

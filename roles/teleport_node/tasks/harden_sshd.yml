@@ -1,0 +1,20 @@
+---
+# Runs over the Teleport transport on purpose: a host whose Teleport path does not
+# work is unreachable here and keeps OpenSSH. Nothing is masked or uninstalled, so
+# console access can always `systemctl enable --now` it again.
+- name: Check the requested mode
+  ansible.builtin.assert:
+    that: teleport_sshd_mode in ['disabled', 'untouched']
+    fail_msg: "teleport_sshd_mode must be disabled or untouched"
+
+# Socket first, then service. A unit that does not exist on this distro is skipped.
+- name: Stop and disable OpenSSH
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop: "{{ teleport_node_sshd_units[ansible_facts['os_family']] }}"
+  register: teleport_sshd_disable
+  failed_when: teleport_sshd_disable is failed and 'Could not find' not in (teleport_sshd_disable.msg | default(''))
+  changed_when: teleport_sshd_disable is changed
+  when: teleport_sshd_mode == 'disabled'

@@ -1,0 +1,58 @@
+# Headless controller identity (teleport_controller_identity: bot). Apply once:
+#   tctl create -f teleport-resources/bot-fleet-onboarder.yaml
+#   tctl get token/fleet-onboarder-bound-keypair --with-secrets --format=json \
+#     | jq -r '.[0].status.bound_keypair.registration_secret'
+# Put the secret in controller/tbot.yaml and start tbot.
+#
+# Same grants as fleet-onboarding-operator, plus a deny on env=prod so an unattended
+# controller can never touch production hosts. bound_keypair join: the controller has
+# nothing to attest, so the server issues a one-time registration secret and tbot's
+# first join binds a keypair it generated in its storage directory.
+kind: role
+version: v8
+metadata:
+  name: fleet-onboarder
+  description: Bot role for the teleport-fleet-ansible controller
+spec:
+  options:
+    max_session_ttl: 8h0m0s
+    create_host_user_mode: "off"
+  allow:
+    rules:
+      - resources: [token]                 # update: `tctl create` upserts
+        verbs: [create, read, list, update, delete]
+      - resources: [node]
+        verbs: [read, list, delete]
+      - resources: [instance]
+        verbs: [read, list]
+    node_labels:
+      onboarded-by: ansible
+      lifecycle: provisioning
+    logins: [root, ansible, ubuntu, rocky, ec2-user]
+  deny:
+    node_labels:
+      env: prod
+---
+kind: bot
+version: v1
+metadata:
+  name: fleet-onboarder
+spec:
+  roles: [fleet-onboarder]
+---
+kind: token
+version: v2
+metadata:
+  name: fleet-onboarder-bound-keypair
+spec:
+  roles: [Bot]
+  join_method: bound_keypair
+  bot_name: fleet-onboarder
+  bound_keypair:
+    onboarding: {}
+    # relaxed: the keypair and join state are still verified on every join, but a
+    # controller that sleeps past its certificate lifetime (a laptop, an idle runner)
+    # may rejoin any number of times. standard (the default, limit 1) is for tbot
+    # instances that run continuously.
+    recovery:
+      mode: relaxed

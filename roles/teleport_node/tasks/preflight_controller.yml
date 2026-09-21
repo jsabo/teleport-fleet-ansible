@@ -1,0 +1,21 @@
+---
+# Fleet-wide checks, once per play. Runs in a linear play so run_once results reach
+# every host.
+# Role defaults are not visible through hostvars, so record the name as a fact first.
+- name: Record this host's node name
+  ansible.builtin.set_fact:
+    teleport_node_name_fact: "{{ teleport_nodename_effective }}"
+
+- name: Assert node names are unique across the fleet
+  ansible.builtin.assert:
+    that: >-
+      (ansible_play_hosts | map('extract', hostvars, 'teleport_node_name_fact') | list | length)
+      == (ansible_play_hosts | map('extract', hostvars, 'teleport_node_name_fact') | unique | list | length)
+    fail_msg: "Duplicate node names in the play; `tsh ssh <name>` would be ambiguous"
+  run_once: true
+
+- name: Check the controller identity
+  ansible.builtin.include_tasks: controller_guard.yml
+
+- name: Resolve the artifact to install
+  ansible.builtin.include_tasks: resolve_version.yml

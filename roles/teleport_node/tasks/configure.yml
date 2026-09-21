@@ -1,0 +1,48 @@
+---
+# Render /etc/teleport.yaml. (teleport node configure cannot emit the bound_keypair
+# block, the `commands` labels or enhanced_recording, so a template is used.)
+- name: Check for an existing configuration
+  ansible.builtin.stat:
+    path: /etc/teleport.yaml
+  register: teleport_cfg_stat
+
+# A joined host never needs a token again, but the name stays in the file. Carry the
+# existing one forward so re-runs render the same bytes.
+- name: Read the existing configuration
+  ansible.builtin.slurp:
+    src: /etc/teleport.yaml
+  register: teleport_cfg_existing
+  when: teleport_cfg_stat.stat.exists and not (teleport_needs_join | default(false))
+
+- name: Carry the existing token name forward
+  ansible.builtin.set_fact:
+    teleport_join_token_name: >-
+      {{ (teleport_cfg_existing.content | b64decode | from_yaml).teleport.join_params.token_name
+         | default('already-joined') }}
+  when: teleport_cfg_existing is not skipped and teleport_join_token_name is not defined
+
+- name: Default the token name when nothing exists yet
+  ansible.builtin.set_fact:
+    teleport_join_token_name: already-joined
+  when: teleport_join_token_name is not defined
+
+- name: Write /etc/teleport.yaml
+  ansible.builtin.template:
+    src: teleport.yaml.j2
+    dest: /etc/teleport.yaml
+    owner: root
+    group: root
+    mode: "0600"
+    backup: true
+    validate: /usr/local/bin/teleport configure --test %s
+  notify: reload teleport
+
+- name: Place the one-time join secret
+  ansible.builtin.copy:
+    content: "{{ teleport_join_secret }}\n"
+    dest: "{{ teleport_data_dir }}/registration-secret"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+  when: (teleport_needs_join | default(false)) and teleport_join_secret is defined

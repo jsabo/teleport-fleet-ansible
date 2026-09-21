@@ -1,0 +1,29 @@
+---
+- name: Enable and start the agent
+  ansible.builtin.systemd_service:
+    name: teleport
+    enabled: true
+    state: started
+    daemon_reload: true
+
+# Conditions live here, not on the import: a `when` on import_role would also attach
+# itself to the role's handlers and silently skip the reload on later runs.
+- name: First join
+  when: teleport_needs_join | bool
+  block:
+    - name: Wait for the agent to pick its host UUID
+      ansible.builtin.wait_for:
+        path: "{{ teleport_data_dir }}/host_uuid"
+        timeout: 60
+
+    - name: Read the host UUID
+      ansible.builtin.slurp:
+        src: "{{ teleport_data_dir }}/host_uuid"
+      register: teleport_host_uuid_raw
+
+    # Registration is confirmed for the whole fleet at once in finish_join.yml.
+    - name: Mark this host as joining
+      ansible.builtin.set_fact:
+        teleport_host_uuid: "{{ teleport_host_uuid_raw.content | b64decode | trim }}"
+        teleport_node_name_fact: "{{ teleport_nodename_effective }}"
+        teleport_joined_this_run: true

@@ -1,0 +1,22 @@
+---
+# Internal distro maps. Not user-tunable.
+
+# OpenSSH units per family, sockets first: Ubuntu 22.10+ starts sshd on demand from
+# ssh.socket, so stopping only ssh.service brings it back on the next connection.
+teleport_node_sshd_units:
+  Debian: [ssh.socket, ssh.service]
+  RedHat: [sshd.socket, sshd.service]
+
+teleport_node_ca_dir:
+  Debian: /usr/local/share/ca-certificates
+  RedHat: /etc/pki/ca-trust/source/anchors
+
+teleport_node_ca_update_cmd:
+  Debian: update-ca-certificates
+  RedHat: update-ca-trust extract
+
+teleport_node_arch_map:
+  x86_64: amd64
+  aarch64: arm64
+  armv7l: arm
+  i686: "386"

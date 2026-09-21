@@ -1,0 +1,27 @@
+---
+# One pass: list the lab's node records, remove them, wait if any were found.
+- name: Read nodes
+  ansible.builtin.command: tctl nodes ls --format=json
+  register: lab_nodes
+  changed_when: false
+
+- name: Select the lab's node records
+  ansible.builtin.set_fact:
+    lab_node_records: >-
+      {{ lab_nodes.stdout | from_json
+         | selectattr('metadata.labels.onboarded-by', 'defined')
+         | selectattr('metadata.labels.site', 'equalto', lab_site_label) | list }}
+
+- name: Remove them
+  ansible.builtin.command: tctl rm node/{{ item.metadata.name }}
+  loop: "{{ lab_node_records }}"
+  loop_control:
+    label: "{{ item.spec.hostname }}"
+  register: lab_rm
+  changed_when: lab_rm.rc == 0
+  failed_when: lab_rm.rc != 0 and 'not found' not in (lab_rm.stderr | lower)
+
+- name: Let a late heartbeat land before checking again
+  ansible.builtin.pause:
+    seconds: 10
+  when: lab_node_records | length > 0

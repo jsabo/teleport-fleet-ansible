@@ -1,0 +1,28 @@
+---
+# A joined agent keeps its identity under <data_dir>/proc and restarts without a
+# token. Only hosts without that state (or with teleport_force_rejoin) get a token.
+- name: Detect an existing Teleport identity
+  ansible.builtin.stat:
+    path: "{{ teleport_data_dir }}/proc"
+  register: teleport_proc_dir
+
+- name: Decide whether this host needs to join
+  ansible.builtin.set_fact:
+    teleport_needs_join: "{{ (teleport_force_rejoin | bool) or (not teleport_proc_dir.stat.exists) }}"
+
+- name: Forget the old identity (forced rejoin)
+  when: (teleport_force_rejoin | bool) and teleport_proc_dir.stat.exists
+  block:
+    - name: Stop the agent
+      ansible.builtin.systemd_service:
+        name: teleport
+        state: stopped
+      failed_when: false
+
+    - name: Remove the stored identity
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ teleport_data_dir }}/proc"
+        - "{{ teleport_data_dir }}/host_uuid"

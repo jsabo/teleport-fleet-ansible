@@ -1,0 +1,52 @@
+---
+# Runs over the Teleport transport, so reaching the host at all is the first proof.
+- name: Reach the host through Teleport
+  ansible.builtin.ping:
+
+- name: Read the updater status
+  ansible.builtin.command: /usr/local/bin/teleport-update status
+  register: teleport_update_status
+  changed_when: false
+
+- name: Assert Managed Updates are enabled with the right group and source
+  ansible.builtin.assert:
+    that:
+      - (teleport_update_status.stdout | from_yaml).enabled | bool
+      - (teleport_update_status.stdout | from_yaml).group | default('default') == teleport_update_group
+      - (teleport_update_status.stdout | from_yaml).base_url | default('') == teleport_expected_status_base_url
+      - (teleport_update_status.stdout | from_yaml).active.version is defined
+    fail_msg: "teleport-update status is not what the inventory asks for:\n{{ teleport_update_status.stdout }}"
+
+- name: Read the cluster's view of the fleet
+  ansible.builtin.command: "{{ teleport_tctl }} nodes ls --format=json"
+  register: teleport_nodes_json
+  delegate_to: localhost
+  become: false
+  run_once: true
+  changed_when: false
+
+- name: Find this host's node record
+  ansible.builtin.set_fact:
+    teleport_node_record: >-
+      {{ teleport_nodes_json.stdout | from_json
+         | selectattr('spec.hostname', 'equalto', teleport_nodename_effective) | list }}
+
+- name: Assert the node carries the expected labels
+  ansible.builtin.assert:
+    that:
+      - teleport_node_record | length == 1
+      - (teleport_node_record[0].metadata.labels | combine(teleport_all_static_labels)) == teleport_node_record[0].metadata.labels
+      - "'kernel' in (teleport_node_record[0].spec.cmd_labels | default({}))"
+    fail_msg: >-
+      {{ teleport_nodename_effective }}: expected one node with labels {{ teleport_all_static_labels }},
+      found {{ teleport_node_record | map(attribute='metadata.labels') | list }}
+
+- name: Fleet summary
+  ansible.builtin.debug:
+    msg: >-
+      {% for h in ansible_play_hosts %}{% set s = hostvars[h].teleport_update_status.stdout | from_yaml %}
+      {{ h }}: teleport {{ s.active.version }}, group {{ s.group | default('default') }},
+      source {{ s.base_url | default('https://cdn.teleport.dev') }},
+      labels {{ hostvars[h].teleport_node_record[0].metadata.labels | dict2items | map(attribute='key') | zip(hostvars[h].teleport_node_record[0].metadata.labels | dict2items | map(attribute='value')) | map('join', '=') | join(' ') }}
+      {% if not loop.last %}| {% endif %}{% endfor %}
+  run_once: true

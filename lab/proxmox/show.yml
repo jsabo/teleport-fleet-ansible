@@ -1,0 +1,70 @@
+---
+# What the cluster and the hosts look like right now.
+#   ansible-playbook -i inventory/lab.yml lab/proxmox/show.yml
+- name: Cluster view
+  hosts: nodes
+  gather_facts: false
+  tasks:
+    - name: Read nodes
+      ansible.builtin.command: tctl nodes ls --format=json
+      register: lab_nodes
+      changed_when: false
+      delegate_to: localhost
+      run_once: true
+
+    - name: Read the agent inventory
+      ansible.builtin.command: tctl inventory ls --services node --format=json
+      register: lab_inventory
+      changed_when: false
+      failed_when: false
+      delegate_to: localhost
+      run_once: true
+
+    - name: Nodes visible to this login (onboarded-by=ansible)
+      ansible.builtin.debug:
+        msg: >-
+          {{ lab_nodes.stdout | from_json
+             | selectattr('metadata.labels.onboarded-by', 'defined')
+             | map(attribute='spec.hostname') | zip(
+               lab_nodes.stdout | from_json
+               | selectattr('metadata.labels.onboarded-by', 'defined')
+               | map(attribute='metadata.labels'))
+             | map('join', ' ') | list }}
+      run_once: true
+
+    # Instance records of destroyed VMs linger for a few minutes; show the newest per host.
+    - name: Agents in the inventory (version, updater, group)
+      ansible.builtin.debug:
+        msg: >-
+          {% for name, rows in lab_inventory.stdout | from_json | selectattr('spec.hostname', 'in', ansible_play_hosts) | groupby('spec.hostname') %}
+          {% set i = rows | sort(attribute='spec.last_seen') | last %}
+          {{ name }}: {{ i.spec.version }} upgrader={{ i.spec.ext_upgrader | default('-') }}
+          group={{ i.spec.UpdaterInfo.UpdateGroup | default('-') }};
+          {% endfor %}
+      run_once: true
+      when: lab_inventory.rc == 0
+
+- name: Host view (through Teleport)
+  hosts: nodes
+  vars_files:
+    - ../../vars/transport-teleport.yml
+  gather_facts: true
+  gather_subset: [min]
+  become: true
+  ignore_unreachable: true
+  tasks:
+    - name: Read OpenSSH unit state
+      ansible.builtin.command: systemctl is-enabled {{ item }}
+      loop: "{{ teleport_node_sshd_units[ansible_facts['os_family']] }}"
+      register: lab_sshd
+      changed_when: false
+      failed_when: false
+      vars:
+        teleport_node_sshd_units:
+          Debian: [ssh.socket, ssh.service]
+          RedHat: [sshd.socket, sshd.service]
+
+    - name: OpenSSH state
+      ansible.builtin.debug:
+        msg: "{{ lab_sshd.results | map(attribute='item') | zip(lab_sshd.results | map(attribute='stdout', default='unreachable')) | map('join', '=') | join(' ') }}"
+      when: lab_sshd.results is defined

@@ -1,0 +1,71 @@
+---
+# Enrol.
+#   A (linear)  decide who needs a token, resolve the artifacts, mint every token in one
+#               tctl call and read the secrets in another
+#   B (free)    install via teleport-update, render config, start the agent
+#   C (linear)  one wait for the whole fleet to register, then per host: delete the
+#               one-time secret, prove the token is bound to that host, remove the token
+#
+# Transport: OpenSSH by default. After harden, re-run over Teleport to change the
+# updater group or download source:  -e transport=teleport
+- import_playbook: _teleport-transport.yml
+
+- name: Enrol A — mint tokens
+  hosts: "{{ target | default('nodes') }}"
+  vars_files:
+    - "../vars/transport-{{ transport | default('openssh') }}.yml"
+  gather_facts: true
+  gather_subset: [min]
+  become: true
+  tasks:
+    - name: Decide who needs to join
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: needs_join
+
+    - name: Resolve the artifacts to install
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: resolve_version
+
+    - name: Mint tokens
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: mint_tokens
+
+- name: Enrol B — install, configure, start
+  hosts: "{{ target | default('nodes') }}"
+  vars_files:
+    - "../vars/transport-{{ transport | default('openssh') }}.yml"
+  gather_facts: true
+  gather_subset: [min]
+  strategy: free
+  become: true
+  max_fail_percentage: 20
+  tasks:
+    - name: Install Teleport through teleport-update
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: install
+
+    - name: Write the configuration
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: configure
+
+    - name: Start the agent
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: join
+
+- name: Enrol C — registration, binding, cleanup
+  hosts: "{{ target | default('nodes') }}"
+  vars_files:
+    - "../vars/transport-{{ transport | default('openssh') }}.yml"
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Finish the join
+      ansible.builtin.import_role:
+        name: teleport_node
+        tasks_from: finish_join

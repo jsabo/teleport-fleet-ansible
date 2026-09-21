@@ -1,0 +1,11 @@
+---
+# Full onboarding run: OpenSSH in, Teleport out.
+#   00  preflight   (OpenSSH)   fail fast per host, resolve the artifact to install
+#   10  enroll      (OpenSSH)   mint per-host tokens, install, configure, join
+#   20  verify      (Teleport)  prove every host is reachable through the proxy
+#   30  harden      (Teleport)  stop and disable OpenSSH
+# Each file also runs on its own, e.g. `ansible-playbook playbooks/30-harden.yml --limit web-01`.
+- import_playbook: playbooks/00-preflight.yml
+- import_playbook: playbooks/10-enroll.yml
+- import_playbook: playbooks/20-verify.yml
+- import_playbook: playbooks/30-harden.yml

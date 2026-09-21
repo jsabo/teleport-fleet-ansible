@@ -1,0 +1,32 @@
+# Operator role for teleport-fleet-ansible. Apply once:
+#   tctl create -f teleport-resources/role-fleet-onboarding-operator.yaml
+# then grant it to the operator (SSO connector mapping, or tctl users update for a
+# local user) and log in again so the certificate carries it.
+#
+#   token    create/read/update/delete   mint per-host join tokens, read their one-time
+#                                 secrets, remove them after the join
+#   node     read/list/delete     wait for registration, verify labels, unenrol
+#   instance read/list            tctl inventory ls (updater type and group)
+#   node_labels                   only hosts in lifecycle=provisioning are reachable;
+#                                 once classified `active` the role loses them
+kind: role
+version: v8
+metadata:
+  name: fleet-onboarding-operator
+  description: Onboard Linux servers with teleport-fleet-ansible (provisioning-phase hosts only)
+spec:
+  options:
+    max_session_ttl: 8h0m0s
+    create_host_user_mode: "off"
+  allow:
+    rules:
+      - resources: [token]                 # update: `tctl create` upserts
+        verbs: [create, read, list, update, delete]
+      - resources: [node]
+        verbs: [read, list, delete]
+      - resources: [instance]
+        verbs: [read, list]
+    node_labels:
+      onboarded-by: ansible
+      lifecycle: provisioning
+    logins: [root, ansible, ubuntu, rocky, ec2-user]

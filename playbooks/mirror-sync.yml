@@ -1,0 +1,77 @@
+---
+# Populate an internal artifact mirror with what the cluster advertises. Runs on the
+# controller; serve the destination directory over HTTPS (docs/mirror.md).
+#
+#   ansible-playbook playbooks/mirror-sync.yml -e mirror_dest=/srv/teleport \
+#       -e teleport_proxy=example.teleport.sh:443 [-e '{"mirror_archs":["amd64","arm64"]}']
+#
+# For each version × architecture two tarballs are needed, each with its .sha256 and
+# .sig (cosign signature verified against keys inside teleport-update): the small
+# teleport-update bootstrap tarball and the full agent tarball. One flat directory,
+# original names, files copied unmodified.
+- name: Sync Teleport artifacts
+  hosts: localhost
+  gather_facts: false
+  vars:
+    mirror_source: https://cdn.teleport.dev
+    mirror_archs: [amd64, arm64]
+    mirror_extra_versions: []
+  tasks:
+    - name: Ask the cluster what it advertises
+      ansible.builtin.uri:
+        url: "https://{{ teleport_proxy }}/v1/webapi/find"
+        return_content: true
+      register: mirror_find
+
+    - name: Work out the artifact set
+      ansible.builtin.set_fact:
+        mirror_pkg: "{{ 'teleport-ent' if mirror_find.json.edition == 'ent' else 'teleport' }}"
+        mirror_fips: "{{ mirror_find.json.fips | default(false) }}"
+        mirror_versions: >-
+          {{ ([mirror_find.json.auto_update.agent_version | default(mirror_find.json.server_version), mirror_find.json.server_version]
+              + mirror_extra_versions) | map('regex_replace', '^v', '') | unique | list }}
+
+    # Two tarballs per version and architecture: the small teleport-update bootstrap
+    # tarball and the full agent tarball that teleport-update installs.
+    - name: Build the file list
+      ansible.builtin.set_fact:
+        mirror_files: >-
+          {{ mirror_files | default([])
+             + ['teleport-update-v' ~ item.0 ~ '-linux-' ~ item.1 ~ '-bin.tar.gz']
+             + [mirror_pkg ~ '-v' ~ item.0 ~ '-linux-' ~ item.1 ~ ('-fips' if mirror_fips | bool else '') ~ '-bin.tar.gz'] }}
+      loop: "{{ mirror_versions | product(mirror_archs) | list }}"
+
+    - name: Create the destination
+      ansible.builtin.file:
+        path: "{{ mirror_dest }}"
+        state: directory
+        mode: "0755"
+
+    - name: Fetch the checksums and signatures
+      ansible.builtin.get_url:
+        url: "{{ mirror_source }}/{{ item.0 }}{{ item.1 }}"
+        dest: "{{ mirror_dest }}/{{ item.0 }}{{ item.1 }}"
+        mode: "0644"
+      loop: "{{ mirror_files | product(['.sha256', '.sig']) | list }}"
+      loop_control:
+        label: "{{ item.0 }}{{ item.1 }}"
+
+    - name: Fetch the tarballs (verified against their .sha256)
+      ansible.builtin.get_url:
+        url: "{{ mirror_source }}/{{ item }}"
+        dest: "{{ mirror_dest }}/{{ item }}"
+        checksum: "sha256:file://{{ mirror_dest }}/{{ item }}.sha256"
+        mode: "0644"
+        timeout: 120
+      loop: "{{ mirror_files }}"
+      register: mirror_download
+      retries: 3
+      delay: 10
+      until: mirror_download is succeeded
+
+    - name: Manifest
+      ansible.builtin.debug:
+        msg:
+          - "cluster {{ teleport_proxy }}: edition={{ mirror_find.json.edition }} agent_version={{ mirror_find.json.auto_update.agent_version | default('-') }} server_version={{ mirror_find.json.server_version }}"
+          - "files in {{ mirror_dest }}: {{ mirror_files }}"
+          - "set teleport_download_base_url to the https:// URL that serves {{ mirror_dest }}"

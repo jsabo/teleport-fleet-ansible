@@ -1,0 +1,43 @@
+# Managed by teleport-fleet-ansible (playbooks/10-enroll.yml, playbooks/labels.yml).
+# Static labels are read once at start; the playbooks reload the service (SIGHUP)
+# after changing them. Labels under `commands` refresh on their own period.
+version: v3
+teleport:
+  nodename: {{ teleport_nodename_effective }}
+  data_dir: {{ teleport_data_dir }}
+  proxy_server: {{ teleport_proxy }}
+  join_params:
+    token_name: {{ teleport_join_token_name }}
+    method: bound_keypair
+    bound_keypair:
+      # Read only at the first join. The enrol playbook deletes the file afterwards;
+      # the agent then restarts from the identity stored under data_dir/proc.
+      registration_secret_path: {{ teleport_data_dir }}/registration-secret
+
+auth_service:
+  enabled: false
+
+proxy_service:
+  enabled: false
+
+ssh_service:
+  enabled: true
+  labels:
+{% for key, value in teleport_all_static_labels | dictsort %}
+    {{ key }}: "{{ value }}"
+{% endfor %}
+  commands:
+    - name: arch
+      command: [uname, -m]
+      period: 24h
+    - name: kernel
+      command: [uname, -r]
+      period: 1h
+    - name: distro
+      command: [sh, -c, '. /etc/os-release && printf "%s-%s" "$ID" "$VERSION_ID"']
+      period: 24h
+  enhanced_recording:
+    enabled: {{ teleport_enhanced_recording | bool | lower }}
+  port_forwarding: {{ teleport_port_forwarding | bool | lower }}
+  ssh_file_copy: {{ teleport_ssh_file_copy | bool | lower }}
+  disable_create_host_user: {{ teleport_disable_create_host_user | bool | lower }}

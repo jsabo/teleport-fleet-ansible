@@ -1,0 +1,90 @@
+---
+# The whole flow, with the cluster and host view printed after every step.
+#   ansible-playbook -i inventory/lab.yml lab/proxmox/run.yml -e lab_pause=true
+# With lab_pause each step waits for Enter and says what to watch. Without it the
+# run is unattended. Add -e lab_mirror=true after lab/proxmox/up.yml -e lab_mirror=true
+# and lab/proxmox/mirror.yml; add -e teleport_controller_identity=bot to run as the bot.
+#
+# The same steps by hand, one command each (see README "Step by step"):
+#   ansible-playbook -i inventory/lab.yml playbooks/00-preflight.yml
+#   ansible-playbook -i inventory/lab.yml playbooks/10-enroll.yml
+#   ansible-playbook -i inventory/lab.yml playbooks/20-verify.yml
+#   ansible-playbook -i inventory/lab.yml playbooks/30-harden.yml
+- name: Step 1 of 4
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Preflight
+      ansible.builtin.pause:
+        prompt: |
+
+          STEP 1/4  PREFLIGHT  (over OpenSSH)
+          Every host is checked before anything is installed: systemd, CPU architecture,
+          hostname, clock, disk, and that the proxy and the exact artifact version are
+          reachable. The controller's own login is checked too. A host that fails is
+          dropped from the run; the others continue.
+          Watch for: one assert per check, per host; the artifact URL resolved from the
+          cluster's advertised version.
+          Enter to run
+      when: lab_pause | default(false) | bool
+
+- import_playbook: ../../playbooks/00-preflight.yml
+
+- name: Step 2 of 4
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Enrol
+      ansible.builtin.pause:
+        prompt: |
+
+          STEP 2/4  ENROL  (over OpenSSH)
+          One bound_keypair token per host is created in a single tctl call. Each host
+          downloads the small updater tarball, `teleport-update enable` installs the
+          advertised version and turns on Managed Updates, the agent starts. Then one
+          wait for the whole fleet to register, the one-time secrets are deleted from
+          the hosts, each token is confirmed bound to its host and removed.
+          Watch for: "3 host(s) need a token", the registration wait, "Remove the used tokens".
+          Enter to run
+      when: lab_pause | default(false) | bool
+
+- import_playbook: ../../playbooks/10-enroll.yml
+- import_playbook: show.yml
+
+- name: Step 3 of 4
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Verify
+      ansible.builtin.pause:
+        prompt: |
+
+          STEP 3/4  VERIFY  (through Teleport)
+          From here Ansible no longer uses OpenSSH: it connects to <node>.<cluster> with
+          the ssh config `tsh config` wrote. Read-only checks: updater enabled and in the
+          right group, labels on the node record, then a one-line fleet summary.
+          Watch for: "Reach the host through Teleport" ok on every host; changed=0.
+          Enter to run
+      when: lab_pause | default(false) | bool
+
+- import_playbook: ../../playbooks/20-verify.yml
+
+- name: Step 4 of 4
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Harden
+      ansible.builtin.pause:
+        prompt: |
+
+          STEP 4/4  HARDEN  (through Teleport, in batches)
+          OpenSSH is stopped and disabled on each host. Because this play reaches the
+          host through Teleport, a host whose Teleport path did not work would be
+          unreachable here and would keep OpenSSH.
+          Watch for: ssh.socket and ssh.service (Ubuntu) or sshd.service (Rocky) changed;
+          afterwards `ssh ansible@<ip>` is refused and `tsh ssh root@<node>` works.
+          Enter to run
+      when: lab_pause | default(false) | bool
+
+- import_playbook: ../../playbooks/30-harden.yml
+- import_playbook: show.yml
