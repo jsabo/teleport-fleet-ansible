@@ -23,7 +23,7 @@ Everything is Ansible: Terraform runs through the `community.general.terraform` 
 ## The loop
 
 ```bash
-ansible-playbook lab/proxmox/up.yml                                   # ~2 min: images (first time), 3 VMs, inventory, wait for SSH
+ansible-playbook lab/proxmox/up.yml                                   # ~1 min (first time ~2 min: image download), 3 VMs, inventory, wait for SSH
 ansible-playbook -i inventory/lab.yml lab/proxmox/run.yml -e lab_pause=true   # narrated: each step explains itself, Enter to run it
 ansible-playbook -i inventory/lab.yml lab/proxmox/show.yml           # cluster and host view at any time
 ansible-playbook lab/proxmox/reset.yml                                # fresh VMs: down, then up
@@ -44,7 +44,11 @@ tsh ssh root@fleet-ubuntu-1                                    # works
 ```
 
 Fresh VMs each time: `reset.yml` recreates the disks from the downloaded cloud images
-(about five minutes for the full destroy, recreate and onboard cycle, measured: VMs up in 1 min 40 s, the four phases in 1 min 20 s, teardown in 1 min 50 s, most of it the probe that proves the agents are gone). Two Ubuntu 24.04 hosts and one Rocky Linux 9 host by default (`lab/proxmox/variables.tf`).
+(about three and a half minutes for the full destroy, recreate and onboard cycle,
+measured: VMs up in 45 s with the images already on the datastore, the four phases in
+1 min 15 s, teardown in 1 min 15 s to 1 min 30 s, most of it the probe that proves the
+agents are gone). Two Ubuntu 24.04 hosts and one Rocky Linux 9 host by default
+(`lab/proxmox/variables.tf`).
 
 ## Beats
 
@@ -92,9 +96,10 @@ private CA on the mirror VM.
 ## Cleaning up
 
 `down.yml` stops the agents through Teleport (hosts it cannot reach are skipped),
-waits until Teleport can no longer reach each host, destroys the VMs, asserts the
-Terraform state is empty, removes any node records still carrying
-`onboarded-by=ansible` and the lab site label, and deletes the generated inventory.
+waits until Teleport can no longer reach each host, destroys the VMs, removes any node
+records still carrying `onboarded-by=ansible` and the lab site label, and deletes the
+generated inventory. The downloaded cloud images stay on the Proxmox datastore so the
+next `up.yml` does not fetch them again; `-e lab_keep_images=false` removes them too.
 
 Stopping the agents first matters. A node record outlives its agent by up to 15
 minutes, and while the Auth Service still holds the agent's control stream it

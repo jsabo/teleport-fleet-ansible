@@ -25,5 +25,5 @@
 
 - name: Let a late heartbeat land before checking again
   ansible.builtin.pause:
-    seconds: 10
+    seconds: 5
   when: lab_node_records | length > 0

@@ -26,8 +26,8 @@
   become: false
   run_once: true
   changed_when: false
-  retries: 24
-  delay: 5
+  retries: 60
+  delay: 2
   until: >-
     teleport_registration.rc == 0 and
     (teleport_joined_hosts | map('extract', hostvars, 'teleport_host_uuid')

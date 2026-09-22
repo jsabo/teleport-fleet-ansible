@@ -1,48 +1,59 @@
 ---
-# Once per play, on the controller. tctl always targets the active tsh profile, so
-# a stale or wrong login would mint tokens on the wrong cluster.
-- name: Read the active tsh profile
-  ansible.builtin.command: tsh status --format=json
-  register: teleport_tsh_status
-  changed_when: false
-  failed_when: false
-  delegate_to: localhost
-  become: false
-  run_once: true
-  when: teleport_controller_identity == 'operator'
+# On the controller. tctl always targets the active tsh profile, so a stale or wrong
+# login would mint tokens on the wrong cluster. Checked once per run: when several
+# playbooks run together (site.yml, the lab's run.yml) the later ones reuse the result.
+- name: Controller checks
+  when: (hostvars['localhost'] | default({})).teleport_controller_checked is not defined
+  block:
+    - name: Read the active tsh profile
+      ansible.builtin.command: tsh status --format=json
+      register: teleport_tsh_status
+      changed_when: false
+      failed_when: false
+      delegate_to: localhost
+      become: false
+      run_once: true
+      when: teleport_controller_identity == 'operator'
 
-- name: Assert the operator is logged in to the target cluster
-  ansible.builtin.assert:
-    that:
-      - teleport_tsh_status.rc == 0
-      - (teleport_tsh_status.stdout | from_json).active.cluster == teleport_cluster_name
-    fail_msg: >-
-      {% if teleport_tsh_status.rc != 0 %}tsh says: {{ teleport_tsh_status.stderr | regex_replace('\x1b\[[0-9;]*m', '') | trim }}.
-      {% else %}The active tsh profile is "{{ (teleport_tsh_status.stdout | from_json).active.cluster | default('none') }}",
-      not "{{ teleport_cluster_name }}".{% endif %}
-      Run: tsh login --proxy={{ teleport_proxy }}
-  run_once: true
-  when: teleport_controller_identity == 'operator'
+    - name: Assert the operator is logged in to the target cluster
+      ansible.builtin.assert:
+        that:
+          - teleport_tsh_status.rc == 0
+          - (teleport_tsh_status.stdout | from_json).active.cluster == teleport_cluster_name
+        fail_msg: >-
+          {% if teleport_tsh_status.rc != 0 %}tsh says: {{ teleport_tsh_status.stderr | regex_replace('\x1b\[[0-9;]*m', '') | trim }}.
+          {% else %}The active tsh profile is "{{ (teleport_tsh_status.stdout | from_json).active.cluster | default('none') }}",
+          not "{{ teleport_cluster_name }}".{% endif %}
+          Run: tsh login --proxy={{ teleport_proxy }}
+      run_once: true
+      when: teleport_controller_identity == 'operator'
 
-- name: Check the bot identity file exists
-  ansible.builtin.stat:
-    path: "{{ teleport_repo_root }}/{{ teleport_identity_file }}"
-  register: teleport_identity_stat
-  delegate_to: localhost
-  become: false
-  run_once: true
-  when: teleport_controller_identity == 'bot'
+    - name: Check the bot identity file exists
+      ansible.builtin.stat:
+        path: "{{ teleport_repo_root }}/{{ teleport_identity_file }}"
+      register: teleport_identity_stat
+      delegate_to: localhost
+      become: false
+      run_once: true
+      when: teleport_controller_identity == 'bot'
 
-- name: Assert the bot identity file exists
-  ansible.builtin.assert:
-    that: teleport_identity_stat.stat.exists
-    fail_msg: "No identity at {{ teleport_repo_root }}/{{ teleport_identity_file }}. Is tbot running? See controller/tbot.yaml."
-  run_once: true
-  when: teleport_controller_identity == 'bot'
+    - name: Assert the bot identity file exists
+      ansible.builtin.assert:
+        that: teleport_identity_stat.stat.exists
+        fail_msg: "No identity at {{ teleport_repo_root }}/{{ teleport_identity_file }}. Is tbot running? See controller/tbot.yaml."
+      run_once: true
+      when: teleport_controller_identity == 'bot'
 
-- name: Prove the controller can list nodes
-  ansible.builtin.command: "{{ teleport_tctl }} nodes ls --format=json"
-  changed_when: false
-  delegate_to: localhost
-  become: false
-  run_once: true
+    - name: Prove the controller can list nodes
+      ansible.builtin.command: "{{ teleport_tctl }} nodes ls --format=json"
+      changed_when: false
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Remember that the controller passed its checks in this run
+      ansible.builtin.set_fact:
+        teleport_controller_checked: true
+      delegate_to: localhost
+      delegate_facts: true
+      run_once: true

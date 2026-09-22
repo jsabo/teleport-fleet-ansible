@@ -2,24 +2,35 @@
 # The ssh config the Teleport transport uses. Operator: `tsh config` emits a Host block
 # for *.<cluster> with Port 3022 and a `tsh proxy ssh` ProxyCommand backed by the
 # active login. Bot: tbot already writes an equivalent ssh_config next to its identity.
-- name: Render the Teleport ssh config
-  ansible.builtin.command: tsh config --proxy={{ teleport_proxy }}
-  register: teleport_tsh_config
-  changed_when: false
-  delegate_to: localhost
-  become: false
-  run_once: true
-  when: teleport_controller_identity == 'operator'
+# Written once per run, like the controller checks.
+- name: Teleport ssh config (operator)
+  when:
+    - teleport_controller_identity == 'operator'
+    - (hostvars['localhost'] | default({})).teleport_ssh_config_written is not defined
+  block:
+    - name: Render the Teleport ssh config
+      ansible.builtin.command: tsh config --proxy={{ teleport_proxy }}
+      register: teleport_tsh_config
+      changed_when: false
+      delegate_to: localhost
+      become: false
+      run_once: true
 
-- name: Save the Teleport ssh config
-  ansible.builtin.copy:
-    content: "{{ teleport_tsh_config.stdout }}\n"
-    dest: "{{ teleport_repo_root }}/{{ teleport_ssh_config }}"
-    mode: "0600"
-  delegate_to: localhost
-  become: false
-  run_once: true
-  when: teleport_controller_identity == 'operator'
+    - name: Save the Teleport ssh config
+      ansible.builtin.copy:
+        content: "{{ teleport_tsh_config.stdout }}\n"
+        dest: "{{ teleport_repo_root }}/{{ teleport_ssh_config }}"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      run_once: true
+
+    - name: Remember that the ssh config was written in this run
+      ansible.builtin.set_fact:
+        teleport_ssh_config_written: true
+      delegate_to: localhost
+      delegate_facts: true
+      run_once: true
 
 # vars/transport-teleport.yml reads this fact, so the path holds wherever the calling
 # playbook or the inventory lives.

@@ -1,6 +1,8 @@
 ---
 # Remove the lab fleet: stop the agents, destroy the VMs, remove their node records,
-# drop the generated inventory.
+# drop the generated inventory. The downloaded cloud images stay on the Proxmox
+# datastore so the next up.yml does not fetch them again (-e lab_keep_images=false
+# removes them too).
 #   ansible-playbook -i inventory/lab.yml lab/proxmox/down.yml
 #
 # The agents are stopped first, and the VMs are destroyed only once Teleport can no
@@ -52,10 +54,11 @@
   vars_files:
     - vars.yml
   tasks:
-    - name: Destroy the Terraform stack
+    - name: Destroy the VMs
       community.general.terraform:
         project_path: "{{ playbook_dir }}"
         state: absent
+        targets: "{{ ['proxmox_virtual_environment_vm.vm'] if lab_keep_images | default(true) | bool else omit }}"
         complex_vars: true
         variables:
           proxmox_endpoint: "{{ proxmox_endpoint }}"
@@ -65,14 +68,14 @@
           mirror_enabled: "{{ lab_mirror | default(false) | bool }}"
       no_log: true
 
-    - name: Confirm nothing is left in the Terraform state
+    - name: Read what is left in the Terraform state
       ansible.builtin.command: terraform -chdir={{ playbook_dir }} state list
       register: lab_state
       changed_when: false
 
-    - name: Assert the state is empty
+    - name: Assert only the images remain
       ansible.builtin.assert:
-        that: lab_state.stdout | trim | length == 0
+        that: lab_state.stdout_lines | reject('match', '^proxmox_download_file\\.') | list | length == 0
         fail_msg: "Terraform state still lists: {{ lab_state.stdout_lines }}"
 
     - name: Remove the lab's node records
