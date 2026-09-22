@@ -15,8 +15,7 @@ The enrol play downloads the bootstrap tarball from that URL and passes it to
 ## What the mirror must contain
 
 For each version and architecture two tarballs are needed, each with its `.sha256` and
-`.sig`, in **one flat directory** with their **original names** (Teleport v18.11.0
-`lib/autoupdate/agent/installer.go:163-240`, `lib/autoupdate/package_url.go:42-56`):
+`.sig`, in **one flat directory** with their **original names**:
 
 ```
 teleport-update-v18.11.0-linux-amd64-bin.tar.gz       the updater bootstrap (17 MB), fetched by the playbook
@@ -34,13 +33,12 @@ updater tarball has no edition.
 
 Rules:
 
-- **HTTPS only.** `teleport-update` rejects a base URL that is not `https://`
-  (`lib/autoupdate/agent/config.go:242-244`). The certificate must chain to a CA the
-  hosts trust; `teleport_download_ca_cert` installs a private CA in preflight. The mirror
-  may be addressed by IP if its certificate carries an IP SAN (the lab does this).
+- **HTTPS only.** `teleport-update` rejects a base URL that is not `https://`. The
+  certificate must chain to a CA the hosts trust; `teleport_download_ca_cert` installs a
+  private CA in preflight. The mirror may be addressed by IP if its certificate carries
+  an IP SAN (the lab does this).
 - **Copy, never rebuild.** The `.sig` is a cosign signature checked against public keys
-  compiled into `teleport-update` (v18.11.0 `lib/autoupdate/agent/installer.go:236`), so a
-  repacked or re-signed tarball fails verification.
+  built into `teleport-update`, so a repacked or re-signed tarball fails verification.
 - **All three files, every version.** The updater fetches the `.sha256` first, then the
   tarball, then the `.sig`. Measured against the lab mirror: the 18.11.1 updater
   requested all three; the 18.11.0 updater requested only the checksum and the tarball.
