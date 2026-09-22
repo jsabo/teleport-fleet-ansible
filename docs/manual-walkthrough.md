@@ -138,8 +138,11 @@ Host:
 
 ```bash
 rm /var/lib/teleport/registration-secret           # read once, at the first join; not needed again
-systemctl restart teleport && journalctl -u teleport -n 5   # restarts from /var/lib/teleport/proc, no token
+systemctl restart teleport                         # restarts from /var/lib/teleport/proc, no token
+journalctl -u teleport -f                          # wait for "starting in tunnel mode", then Ctrl-C
 ```
+
+The tunnel to the proxy comes up a few seconds after that line.
 
 ## 6. Verify through Teleport (controller)
 
