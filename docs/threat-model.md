@@ -23,7 +23,9 @@ against Teleport v18.11.0 source; file references are to that tag.
    record the token they joined with).
 3. `tctl auth rotate` for the Host CA invalidates the stolen identity for good.
 4. `tctl rm node/<uuid>` on its own achieves nothing: the node re-heartbeats within
-   seconds unless it is locked.
+   seconds unless it is locked. The reverse also holds: a record outlives its agent by
+   up to 15 minutes, so a decommissioned host stays listed until `tctl rm` removes it
+   (the unenrol playbook does this).
 
 ## Immutable labels (roadmap)
 

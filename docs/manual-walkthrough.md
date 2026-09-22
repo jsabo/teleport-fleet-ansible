@@ -150,6 +150,11 @@ tsh ssh root@web-01 'hostname; teleport-update status | grep -E "enabled|group"'
 Everything from here on goes through Teleport. This is the moment OpenSSH becomes
 optional.
 
+If this replaces a server that had the same name, `tsh ssh` may answer "ambiguous
+host could match multiple nodes": the old node record lives for up to 15 minutes after
+its agent is gone. Use the UUID from step 5 instead (`tsh ssh root@<uuid>`), or delete
+the old record with `tctl rm node/<old uuid>`.
+
 ## 7. Switch OpenSSH off (controller, through Teleport)
 
 ```bash

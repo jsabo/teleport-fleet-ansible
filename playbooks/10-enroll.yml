@@ -37,8 +37,7 @@
   hosts: "{{ target | default('nodes') }}"
   vars_files:
     - "../vars/transport-{{ transport | default('openssh') }}.yml"
-  gather_facts: true
-  gather_subset: [min]
+  gather_facts: false           # gathered by play A
   strategy: free
   become: true
   max_fail_percentage: 20

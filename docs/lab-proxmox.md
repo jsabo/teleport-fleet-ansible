@@ -26,8 +26,8 @@ Everything is Ansible: Terraform runs through the `community.general.terraform` 
 ansible-playbook lab/proxmox/up.yml                                   # ~2 min: images (first time), 3 VMs, inventory, wait for SSH
 ansible-playbook -i inventory/lab.yml lab/proxmox/run.yml -e lab_pause=true   # narrated: each step explains itself, Enter to run it
 ansible-playbook -i inventory/lab.yml lab/proxmox/show.yml           # cluster and host view at any time
-ansible-playbook -i inventory/lab.yml lab/proxmox/reset.yml          # fresh VMs: down, then up
-ansible-playbook -i inventory/lab.yml lab/proxmox/down.yml           # destroy the VMs, remove their node records
+ansible-playbook lab/proxmox/reset.yml                                # fresh VMs: down, then up
+ansible-playbook lab/proxmox/down.yml                                 # shut the VMs down, remove their node records
 ```
 
 Or drive it by hand, one playbook per step, and look around between them:
@@ -92,10 +92,20 @@ private CA on the mirror VM.
 ## Cleaning up
 
 `down.yml` stops the agents through Teleport (hosts it cannot reach are skipped),
-destroys the VMs, asserts the Terraform state is empty, removes any node records still
-carrying `onboarded-by=ansible` and the lab site label, and deletes the generated
-inventory. Stopping the agents first matters: while the Auth Service still believes an
-agent is connected it re-creates a node record that was just deleted, and a stale record
-with the same name would make `tsh ssh <name>` ambiguous for the next fleet. `up.yml`
-removes any such leftovers again before creating VMs. Any token a broken run left
+waits until Teleport can no longer reach each host, destroys the VMs, asserts the
+Terraform state is empty, removes any node records still carrying
+`onboarded-by=ansible` and the lab site label, and deletes the generated inventory.
+
+Stopping the agents first matters. A node record outlives its agent by up to 15
+minutes, and while the Auth Service still holds the agent's control stream it
+re-creates a record that `tctl rm` deleted. Measured against Teleport 18.11: an agent
+that exits on its own closes the stream at once and the record stays deleted; a VM
+killed (or powered off) with the agent still connected leaves the stream open for about
+four minutes, and the record comes back after every deletion in that window. A stale
+record with the same name makes `tsh ssh <name>` ambiguous for the next fleet; the
+playbooks are unaffected because they address hosts by UUID, the manual walkthrough
+is not. The stop runs through the agent itself, so it is scheduled five seconds ahead
+with a transient systemd timer, Ansible drops its connection, and a `tsh ssh` probe
+must fail before the VMs are destroyed. `up.yml` removes any leftovers again before
+creating VMs. Any token a broken run left
 behind expires on its own within 15 minutes.

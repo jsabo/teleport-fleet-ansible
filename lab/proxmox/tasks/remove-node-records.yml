@@ -19,7 +19,9 @@
     label: "{{ item.spec.hostname }}"
   register: lab_rm
   changed_when: lab_rm.rc == 0
-  failed_when: lab_rm.rc != 0 and 'not found' not in (lab_rm.stderr | lower)
+  # An expired record can stay listed for minutes after the backend has dropped it;
+  # deleting one then fails with "doesn't exist".
+  failed_when: lab_rm.rc != 0 and not (lab_rm.stderr is search("not found|doesn't exist"))
 
 - name: Let a late heartbeat land before checking again
   ansible.builtin.pause:

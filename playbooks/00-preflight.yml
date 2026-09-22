@@ -19,8 +19,7 @@
   hosts: "{{ target | default('nodes') }}"
   vars_files:
     - ../vars/transport-openssh.yml
-  gather_facts: true
-  gather_subset: [min, hardware]
+  gather_facts: false           # gathered by the play above
   strategy: free
   become: true
   tasks:

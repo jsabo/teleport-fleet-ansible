@@ -25,5 +25,4 @@
     - name: Mark this host as joining
       ansible.builtin.set_fact:
         teleport_host_uuid: "{{ teleport_host_uuid_raw.content | b64decode | trim }}"
-        teleport_node_name_fact: "{{ teleport_nodename_effective }}"
         teleport_joined_this_run: true

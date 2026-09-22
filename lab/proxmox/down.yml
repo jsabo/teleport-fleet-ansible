@@ -3,11 +3,13 @@
 # drop the generated inventory.
 #   ansible-playbook -i inventory/lab.yml lab/proxmox/down.yml
 #
-# The agents are stopped first, through Teleport, so their control streams close.
-# While the Auth Service still believes an agent is connected it re-creates the node
-# record that `tctl rm` deletes, and a stale record with the same name would make
-# `tsh ssh <name>` ambiguous for the next fleet. Hosts that cannot be reached (a fleet
-# that never enrolled) are skipped.
+# The agents are stopped first, and the VMs are destroyed only once Teleport can no
+# longer reach them. A node record outlives its agent by up to 15 minutes, and while
+# the Auth Service still holds the agent's control stream it re-creates a record that
+# `tctl rm` deleted (measured: about four minutes after a VM is killed with the agent
+# still connected; immediately closed when the agent exits on its own). A stale record
+# with the same name would make `tsh ssh <name>` ambiguous for the next fleet. Hosts
+# that cannot be reached (a fleet that never enrolled) are skipped.
 - import_playbook: ../../playbooks/_teleport-transport.yml
 
 - name: Stop the agents (Teleport transport)
@@ -25,13 +27,24 @@
       changed_when: true
       failed_when: false
 
-- name: Let the agents shut down before the VMs disappear
-  hosts: localhost
-  gather_facts: false
-  tasks:
-    - name: Wait for the agents to close their connections
-      ansible.builtin.pause:
-        seconds: 12
+    # Drop Ansible's persistent connection so nothing of ours is left open through
+    # the agent while it shuts down.
+    - name: Close this connection
+      ansible.builtin.meta: reset_connection
+
+    # Timer 5 s, then SIGTERM: the agent exits within 3 s (its fast-shutdown timeout).
+    # `tsh ssh` succeeds while the agent is up and fails once the proxy has lost it; if it
+    # still succeeds after 30 s the play fails rather than destroy a connected agent.
+    - name: Wait until Teleport can no longer reach the host
+      ansible.builtin.command: tsh ssh {{ teleport_ssh_login }}@{{ inventory_hostname }} true
+      delegate_to: localhost
+      become: false
+      register: lab_probe
+      changed_when: false
+      failed_when: false
+      retries: 15
+      delay: 2
+      until: lab_probe.rc != 0
 
 - name: Destroy the lab VMs
   hosts: localhost

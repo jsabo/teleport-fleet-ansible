@@ -17,13 +17,8 @@
 - name: Carry the existing token name forward
   ansible.builtin.set_fact:
     teleport_join_token_name: >-
-      {{ (teleport_cfg_existing.content | b64decode | from_yaml).teleport.join_params.token_name
-         | default('already-joined') }}
-  when: teleport_cfg_existing is not skipped and teleport_join_token_name is not defined
-
-- name: Default the token name when nothing exists yet
-  ansible.builtin.set_fact:
-    teleport_join_token_name: already-joined
+      {{ (teleport_cfg_existing.content | b64decode | from_yaml).teleport.join_params.token_name | default('already-joined')
+         if teleport_cfg_existing is not skipped else 'already-joined' }}
   when: teleport_join_token_name is not defined
 
 - name: Write /etc/teleport.yaml

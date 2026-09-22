@@ -31,5 +31,5 @@
   become: false
   register: teleport_node_rm
   changed_when: teleport_node_rm.rc == 0
-  failed_when: teleport_node_rm.rc != 0 and 'not found' not in (teleport_node_rm.stderr | lower)
+  failed_when: teleport_node_rm.rc != 0 and not (teleport_node_rm.stderr is search("not found|doesn't exist"))
   when: teleport_host_uuid is defined

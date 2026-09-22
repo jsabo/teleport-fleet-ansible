@@ -84,12 +84,12 @@
   loop: "{{ teleport_joined_hosts }}"
   run_once: true
 
-- name: Remove the used tokens
-  ansible.builtin.command: "{{ teleport_tctl }} tokens rm {{ hostvars[item].teleport_join_token_name }}"
-  loop: "{{ teleport_joined_hosts }}"
+# tctl removes one token per call; running the task per host lets the calls overlap.
+- name: Remove the used token
+  ansible.builtin.command: "{{ teleport_tctl }} tokens rm {{ teleport_join_token_name }}"
   delegate_to: localhost
   become: false
-  run_once: true
   register: teleport_revoke
   changed_when: teleport_revoke.rc == 0
   failed_when: teleport_revoke.rc != 0 and 'not found' not in (teleport_revoke.stderr | lower)
+  when: teleport_joined_this_run is defined

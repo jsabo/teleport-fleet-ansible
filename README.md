@@ -60,14 +60,14 @@ the per-task profile and timer that `ansible.cfg` enables (`ansible.posix.profil
 
 | Phase | Time | Where it goes |
 |---|---|---|
-| 00 preflight | 9 s | facts, six asserts, two HTTPS checks per host, three `tsh`/`tctl` calls on the controller |
-| 10 enrol | 46 s | `teleport-update enable` (downloads and installs the agent, ~12 s), the agent's first join (~10 s), one wait for all node records, four `tctl` calls |
+| 00 preflight | 8 s | facts, six asserts, two HTTPS checks per host, three `tsh`/`tctl` calls on the controller |
+| 10 enrol | 48 s | `teleport-update enable` (downloads and installs the agent, ~12 s), the agent's first join (~10 s), one wait for all node records (~9 s), three fleet-wide `tctl` calls and one token removal per host |
 | 20 verify | 8 s | read-only; a second run reports `changed=0` |
-| 30 harden | 9 s | two batches (`serial: [2, 10, "25%"]`) |
+| 30 harden | 8 s | two batches (`serial: [2, 10, "25%"]`) |
 
-Hosts install in parallel, so a larger fleet costs little more wall-clock time; the
-controller-side `tctl` calls are fixed in number (create, read, list, remove), not
-per host.
+Hosts install in parallel, so a larger fleet costs little more wall-clock time. The
+controller makes three `tctl` calls for the whole fleet (create the tokens, read the
+secrets, read the bindings) and one `tctl tokens rm` per host, which run in parallel.
 
 Host keys are checked. The OpenSSH transport accepts a host's key on first contact and
 refuses a changed one afterwards (`StrictHostKeyChecking=accept-new`), so a rebuilt
