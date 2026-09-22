@@ -11,4 +11,7 @@ resource "proxmox_download_file" "image" {
   url          = each.value.url
   file_name    = each.value.file_name
   overwrite    = false
+  # An interrupted apply can leave the file on the datastore without a state entry;
+  # re-download it instead of failing with "file already exists".
+  overwrite_unmanaged = true
 }

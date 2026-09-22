@@ -44,7 +44,7 @@ tsh ssh root@fleet-ubuntu-1                                    # works
 ```
 
 Fresh VMs each time: `reset.yml` recreates the disks from the downloaded cloud images
-(about four minutes for the full destroy, recreate and onboard cycle, measured: VMs up in 1 min 40 s, the four phases in 1 min 15 s, teardown in 47 s). Two Ubuntu 24.04 hosts and one Rocky Linux 9 host by default (`lab/proxmox/variables.tf`).
+(about five minutes for the full destroy, recreate and onboard cycle, measured: VMs up in 1 min 40 s, the four phases in 1 min 20 s, teardown in 1 min 50 s, most of it the probe that proves the agents are gone). Two Ubuntu 24.04 hosts and one Rocky Linux 9 host by default (`lab/proxmox/variables.tf`).
 
 ## Beats
 
@@ -106,6 +106,7 @@ record with the same name makes `tsh ssh <name>` ambiguous for the next fleet; t
 playbooks are unaffected because they address hosts by UUID, the manual walkthrough
 is not. The stop runs through the agent itself, so it is scheduled five seconds ahead
 with a transient systemd timer, Ansible drops its connection, and a `tsh ssh` probe
-must fail before the VMs are destroyed. `up.yml` removes any leftovers again before
-creating VMs. Any token a broken run left
-behind expires on its own within 15 minutes.
+must fail before the VMs are destroyed. The failing probe is the slow part of the
+teardown: once the tunnel is gone the proxy falls back to dialling the node's own
+address and gives up after about a minute. `up.yml` removes any leftovers again before
+creating VMs. Any token a broken run left behind expires on its own within 15 minutes.
