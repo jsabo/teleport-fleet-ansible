@@ -9,7 +9,7 @@ fleet can be onboarded first and segmented later, without re-enrolling.
 | Class | Labels | Where set | How it changes later |
 |---|---|---|---|
 | **Trust tier** | `env`, `site` | `teleport_trust_labels` (group vars) | Re-enroll (`unenroll.yml`, then `site.yml`). |
-| **Classification** | `team`, `service`, `tier`, `lifecycle`, `onboarded-by` | `teleport_class_labels` (group or host vars) | `playbooks/labels.yml` rewrites the config and reloads the agent. |
+| **Classification** | `lifecycle`, `onboarded-by` | `teleport_class_labels` (group or host vars) | `playbooks/labels.yml` rewrites the config and reloads the agent. |
 | **Facts** | `arch`, `kernel`, `distro` | `commands:` in the agent config | Refresh themselves on a period (1 h for kernel, 24 h for the rest). |
 
 Static labels are read by the agent once at start. `labels.yml` therefore reloads the

@@ -100,9 +100,6 @@ ssh_service:
   labels:
     env: lab
     site: dc1
-    team: unassigned
-    service: unassigned
-    tier: unclassified
     lifecycle: provisioning
     onboarded-by: manual
   commands:
@@ -179,7 +176,7 @@ The unit files stay; a console session can `systemctl enable --now ssh` at any t
 ## 8. Change a label later
 
 ```bash
-tsh ssh root@web-01 'sed -i "s/team: unassigned/team: payments/" /etc/teleport.yaml && systemctl reload teleport'
+tsh ssh root@web-01 'sed -i "s/lifecycle: provisioning/lifecycle: active/" /etc/teleport.yaml && systemctl reload teleport'
 tctl nodes ls | grep web-01                        # new label within seconds, same UUID
 ```
 

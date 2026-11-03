@@ -122,8 +122,8 @@ its `known_hosts` file.
 
 ## Labels
 
-Every node gets a trust tier (`env`, `site`), a classification (`team`, `service`,
-`tier`, `lifecycle`, `onboarded-by`) and dynamic facts (`arch`, `kernel`, `distro`).
+Every node gets a trust tier (`env`, `site`), a classification (`lifecycle`,
+`onboarded-by`) and dynamic facts (`arch`, `kernel`, `distro`).
 Classification changes with `labels.yml` and an agent reload; the trust tier changes by
 re-enrolling. [docs/labels.md](docs/labels.md).
 

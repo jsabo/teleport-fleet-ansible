@@ -55,9 +55,6 @@ teleport_trust_labels:
   site: unknown
 # What the host is. Change with playbooks/labels.yml.
 teleport_class_labels:
-  team: unassigned
-  service: unassigned
-  tier: unclassified
   lifecycle: provisioning
   onboarded-by: ansible
 teleport_extra_labels: {}
