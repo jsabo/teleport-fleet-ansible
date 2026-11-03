@@ -1,5 +1,5 @@
 ---
-# Enrol.
+# Enroll.
 #   A (linear)  decide who needs a token, resolve the artifacts, mint every token in one
 #               tctl call and read the secrets in another
 #   B (free)    install via teleport-update, render config, start the agent
@@ -10,7 +10,7 @@
 # updater group or download source:  -e transport=teleport
 - import_playbook: _teleport-transport.yml
 
-- name: Enrol A — mint tokens
+- name: Enroll A — mint tokens
   hosts: "{{ target | default('nodes') }}"
   vars_files:
     - "../vars/transport-{{ transport | default('openssh') }}.yml"
@@ -33,7 +33,7 @@
         name: teleport_node
         tasks_from: mint_tokens
 
-- name: Enrol B — install, configure, start
+- name: Enroll B — install, configure, start
   hosts: "{{ target | default('nodes') }}"
   vars_files:
     - "../vars/transport-{{ transport | default('openssh') }}.yml"
@@ -57,7 +57,7 @@
         name: teleport_node
         tasks_from: join
 
-- name: Enrol C — registration, binding, cleanup
+- name: Enroll C — registration, binding, cleanup
   hosts: "{{ target | default('nodes') }}"
   vars_files:
     - "../vars/transport-{{ transport | default('openssh') }}.yml"

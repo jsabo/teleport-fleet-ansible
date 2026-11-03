@@ -34,7 +34,7 @@
   hosts: localhost
   gather_facts: false
   tasks:
-    - name: Enrol
+    - name: Enroll
       ansible.builtin.pause:
         prompt: |
 

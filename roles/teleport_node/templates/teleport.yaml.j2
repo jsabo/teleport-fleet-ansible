@@ -10,7 +10,7 @@ teleport:
     token_name: {{ teleport_join_token_name }}
     method: bound_keypair
     bound_keypair:
-      # Read only at the first join. The enrol playbook deletes the file afterwards;
+      # Read only at the first join. The enroll playbook deletes the file afterwards;
       # the agent then restarts from the identity stored under data_dir/proc.
       registration_secret_path: {{ teleport_data_dir }}/registration-secret
 

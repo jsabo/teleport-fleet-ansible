@@ -1,9 +1,9 @@
 ---
-# Unenrol. Play 1 rides Teleport and brings OpenSSH back. Play 2 rides OpenSSH and
+# Unenroll. Play 1 rides Teleport and brings OpenSSH back. Play 2 rides OpenSSH and
 # is gated by that connection working: if OpenSSH is not reachable, Teleport stays.
 - import_playbook: _teleport-transport.yml
 
-- name: Unenrol 1 — reopen OpenSSH (Teleport transport)
+- name: Unenroll 1 — reopen OpenSSH (Teleport transport)
   hosts: "{{ target | default('nodes') }}"
   vars_files:
     - ../vars/transport-teleport.yml
@@ -16,7 +16,7 @@
         name: teleport_node
         tasks_from: unenroll_reopen
 
-- name: Unenrol 2 — remove Teleport (OpenSSH transport)
+- name: Unenroll 2 — remove Teleport (OpenSSH transport)
   hosts: "{{ target | default('nodes') }}"
   vars_files:
     - ../vars/transport-openssh.yml

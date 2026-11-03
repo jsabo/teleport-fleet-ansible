@@ -4,7 +4,7 @@
 # config written by playbooks/_teleport-transport.yml (from `tsh config`, or tbot's
 # ssh_config output for a bot) supplies Port 3022 and the ProxyCommand. No private
 # key: the certificate named in that config is the credential.
-# Right after an enrolment the node's UUID is known (teleport_host_uuid) and is used
+# Right after an enrollment the node's UUID is known (teleport_host_uuid) and is used
 # instead of the name: a UUID is unique even while the cluster still lists a record of
 # an earlier host that carried the same name. Later runs use the name.
 ansible_host: "{{ teleport_host_uuid | default(teleport_nodename | default(inventory_hostname)) }}.{{ teleport_cluster_name }}"

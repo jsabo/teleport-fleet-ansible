@@ -5,7 +5,7 @@
 #
 #   token    create/read/update/delete   mint per-host join tokens, read their one-time
 #                                 secrets, remove them after the join
-#   node     read/list/delete     wait for registration, verify labels, unenrol
+#   node     read/list/delete     wait for registration, verify labels, unenroll
 #   instance read/list            tctl inventory ls (updater type and group)
 #   node_labels                   only hosts in lifecycle=provisioning are reachable;
 #                                 once classified `active` the role loses them

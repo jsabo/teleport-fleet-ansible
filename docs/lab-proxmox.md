@@ -36,7 +36,7 @@ Or drive it by hand, one playbook per step, and look around between them:
 ansible-playbook -i inventory/lab.yml playbooks/00-preflight.yml
 ansible-playbook -i inventory/lab.yml playbooks/10-enroll.yml
 tsh ls                                                         # the three nodes appear with their labels
-tctl get token/<name>                                          # (during enrol) bound_host_id fills in at the join
+tctl get token/<name>                                          # (during enroll) bound_host_id fills in at the join
 ansible-playbook -i inventory/lab.yml playbooks/20-verify.yml
 ansible-playbook -i inventory/lab.yml playbooks/30-harden.yml
 ssh ansible@<ip>                                               # refused
@@ -56,7 +56,7 @@ agents are gone). Two Ubuntu 24.04 hosts and one Rocky Linux 9 host by default
 |---|---|---|
 | `up` | Three plain Linux servers with OpenSSH and a cloud-init user. Nothing else. | the ping at the end of `up.yml` |
 | 00 preflight | Fail fast: systemd, architecture, hostname, clock, disk, reachability of the proxy and of the exact artifact. One shape of check for Ubuntu and Rocky. | the controller guard: tctl targets the active login, so a stale profile is caught here |
-| 10 enrol | One bound token per host. Each host downloads the small updater tarball, `teleport-update enable` installs the advertised version and sets up Managed Updates, the agent starts. One wait for the fleet to register, then each one-time secret is deleted and each token removed. | `show.yml`: nodes, labels, updater and group |
+| 10 enroll | One bound token per host. Each host downloads the small updater tarball, `teleport-update enable` installs the advertised version and sets up Managed Updates, the agent starts. One wait for the fleet to register, then each one-time secret is deleted and each token removed. | `show.yml`: nodes, labels, updater and group |
 | 20 verify | Ansible now connects *through Teleport*. Read-only checks: updater enabled and in the right group, labels present. | `changed=0` and the fleet summary line |
 | 30 harden | Also through Teleport, in batches. OpenSSH is stopped and disabled; unit files stay. A host that Teleport could not reach would have kept OpenSSH. | `ssh ansible@<ip>` refused; `tsh ssh root@fleet-ubuntu-1` works |
 | reclassify | `labels.yml` moves one host to `team: payments, lifecycle: active`. Access follows the labels. | `tctl nodes ls`; `journalctl -u teleport` shows the SIGHUP reload |

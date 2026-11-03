@@ -1,6 +1,6 @@
 # Serving Teleport artifacts from your own mirror
 
-By default hosts download the agent from `https://cdn.teleport.dev`, both at enrolment
+By default hosts download the agent from `https://cdn.teleport.dev`, both at enrollment
 and on every later update. Set one variable to use an internal source instead:
 
 ```yaml
@@ -8,7 +8,7 @@ teleport_download_base_url: https://mirror.example.internal/teleport
 teleport_download_ca_cert: /path/to/mirror-ca.pem     # only if the mirror uses a private CA
 ```
 
-The enrol play downloads the bootstrap tarball from that URL and passes it to
+The enroll play downloads the bootstrap tarball from that URL and passes it to
 `teleport-update enable --base-url`, which persists it in
 `/opt/teleport/default/update.yaml`. Every future Managed Update pulls from the mirror.
 

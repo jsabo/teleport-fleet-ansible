@@ -1,5 +1,5 @@
 ---
-# OpenSSH transport: used before a host is enrolled (preflight, enrol) and for the
+# OpenSSH transport: used before a host is enrolled (preflight, enroll) and for the
 # last step of unenroll. A host is reached at its `ip:` variable when set, otherwise
 # at its inventory name (which must then resolve).
 ansible_host: "{{ ip | default(inventory_hostname) }}"

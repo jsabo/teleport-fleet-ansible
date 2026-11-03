@@ -61,7 +61,7 @@ the per-task profile and timer that `ansible.cfg` enables (`ansible.posix.profil
 | Phase | Time | Where it goes |
 |---|---|---|
 | 00 preflight | 7 s | facts, six asserts, two HTTPS checks per host, the controller checks (`tsh status`, one `tctl` call) |
-| 10 enrol | 50 s | `teleport-update enable` (downloads and installs the agent, ~12 s), the agent's first join (~10 s), one wait for all node records (~6 s), three fleet-wide `tctl` calls and one token removal per host |
+| 10 enroll | 50 s | `teleport-update enable` (downloads and installs the agent, ~12 s), the agent's first join (~10 s), one wait for all node records (~6 s), three fleet-wide `tctl` calls and one token removal per host |
 | 20 verify | 4 s | read-only; a second run reports `changed=0` |
 | 30 harden | 4 s | two batches (`serial: [2, 10, "25%"]`) |
 
@@ -96,7 +96,7 @@ login: `teleport-resources/bot-fleet-onboarder.yaml`, `controller/tbot.yaml`, an
 
 ```
 OpenSSH  ──► 00 preflight   fail fast per host; learn which version the cluster advertises
-OpenSSH  ──► 10 enrol       one token per host, teleport-update enable, write /etc/teleport.yaml, start;
+OpenSSH  ──► 10 enroll      one token per host, teleport-update enable, write /etc/teleport.yaml, start;
                             then one wait for the fleet to register, delete each one-time secret, remove the tokens
 Teleport ──► 20 verify      read-only: updater on and in the right group, labels present, fleet summary
 Teleport ──► 30 harden      stop and disable OpenSSH, in batches (unit files stay)
@@ -141,7 +141,7 @@ re-enrolling. [docs/labels.md](docs/labels.md).
 
 ```
 site.yml                  00 → 10 → 20 → 30
-playbooks/                preflight, enrol, verify, harden, labels, unenroll, mirror-sync
+playbooks/                preflight, enroll, verify, harden, labels, unenroll, mirror-sync
 roles/teleport_node/      one role; playbooks pick task files with tasks_from
 vars/transport-*.yml      the OpenSSH ↔ Teleport connection switch
 inventory/example.yml     the inventory shape; copy it and point it at your hosts
