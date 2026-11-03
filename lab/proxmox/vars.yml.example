@@ -2,8 +2,8 @@
 # Copy to lab/proxmox/vars.yml (gitignored) and fill in.
 
 # Teleport cluster the fleet joins. Log in first: tsh login --proxy=<teleport_proxy>
+# The cluster name is derived from this by dropping the port.
 teleport_proxy: example.teleport.sh:443
-teleport_cluster_name: example.teleport.sh
 # Managed Updates group the lab VMs report (groups: teleport-resources/autoupdate-config-groups.yaml)
 teleport_update_group: default
 # Login used through Teleport for verify/harden. Must be one of your roles' logins and
