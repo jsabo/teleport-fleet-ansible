@@ -16,9 +16,9 @@ Everything is Ansible: Terraform runs through the `community.general.terraform` 
    itself). `lab/proxmox/vars.yml` is gitignored.
 2. `ansible-galaxy collection install -r requirements.yml`.
 3. `tsh login --proxy=<proxy>`. Your roles must grant the login in `teleport_ssh_login`
-   (default `root`) on nodes carrying the lab labels (`env: <lab_env_label>`,
-   `onboarded-by: ansible`). `tctl nodes ls` and `tsh ls` only show nodes your roles can
-   access, so pick `lab_env_label` to match a role you hold.
+   (default `root`) on nodes carrying the lab's `env: <lab_env_label>` label. `tctl nodes
+   ls` and `tsh ls` only show nodes your roles can access, so pick `lab_env_label` to
+   match a role you hold.
 
 ## The loop
 
@@ -75,7 +75,7 @@ tbot start -c controller/tbot.local.yaml &                # writes controller/tb
 ansible-playbook -i inventory/lab.yml lab/proxmox/run.yml -e teleport_controller_identity=bot
 ```
 
-The bot's role reaches only hosts labelled `onboarded-by: ansible, lifecycle: provisioning`
+The bot's role reaches only hosts labelled `lifecycle: provisioning`
 and never `env: prod`. Remove the secret from `tbot.local.yaml` after the first join; the
 keypair in `controller/.tbot-store` is the identity from then on.
 
@@ -97,7 +97,7 @@ private CA on the mirror VM.
 
 `down.yml` stops the agents through Teleport (hosts it cannot reach are skipped),
 waits until Teleport can no longer reach each host, destroys the VMs, removes any node
-records still carrying `onboarded-by=ansible` and the lab's `env` label, and deletes the
+records left under the lab VMs' hostnames, and deletes the
 generated inventory. The downloaded cloud images stay on the Proxmox datastore so the
 next `up.yml` does not fetch them again; `-e lab_keep_images=false` removes them too.
 

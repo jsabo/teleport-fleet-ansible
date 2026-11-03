@@ -100,7 +100,6 @@ ssh_service:
   labels:
     env: lab
     lifecycle: provisioning
-    onboarded-by: manual
   port_forwarding: false
   ssh_file_copy: false
   disable_create_host_user: true

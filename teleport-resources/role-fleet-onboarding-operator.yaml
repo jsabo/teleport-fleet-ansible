@@ -27,6 +27,5 @@ spec:
       - resources: [instance]
         verbs: [read, list]
     node_labels:
-      onboarded-by: ansible
       lifecycle: provisioning
     logins: [root, ansible, ubuntu, rocky, ec2-user]

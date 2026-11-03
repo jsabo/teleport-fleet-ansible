@@ -9,14 +9,6 @@
   vars:
     lab_mirror_name: fleet-mirror.lab
   tasks:
-    # Records of an earlier lab fleet with the same names would make `tsh ssh <name>`
-    # ambiguous for the new one.
-    - name: Remove stale node records from an earlier lab fleet
-      ansible.builtin.include_tasks: tasks/remove-node-records.yml
-      loop: [1, 2, 3]
-      loop_control:
-        loop_var: lab_attempt
-
     - name: Apply the Terraform stack
       community.general.terraform:
         project_path: "{{ playbook_dir }}"
@@ -38,6 +30,16 @@
         lab_mirror_ip: >-
           {{ (lab_tf.outputs.vms.value | dict2items | selectattr('value.role', 'equalto', 'mirror')
               | map(attribute='value.ip') | first) | default('') }}
+
+    # Records of an earlier lab fleet with the same names would make `tsh ssh <name>`
+    # ambiguous for the new one. The new VMs have no agent yet, so only old records match.
+    - name: Remove stale node records from an earlier lab fleet
+      ansible.builtin.include_tasks: tasks/remove-node-records.yml
+      vars:
+        lab_node_names: "{{ lab_vms | dict2items | selectattr('value.role', 'equalto', 'node') | map(attribute='key') | list }}"
+      loop: [1, 2, 3]
+      loop_control:
+        loop_var: lab_attempt
 
     - name: Show the fleet
       ansible.builtin.debug:

@@ -1,5 +1,6 @@
 ---
 # One pass: list the lab's node records, remove them, wait if any were found.
+# The caller passes lab_node_names, the lab VMs' hostnames; nothing else is touched.
 - name: Read nodes
   ansible.builtin.command: tctl nodes ls --format=json
   register: lab_nodes
@@ -9,8 +10,7 @@
   ansible.builtin.set_fact:
     lab_node_records: >-
       {{ lab_nodes.stdout | from_json
-         | selectattr('metadata.labels.onboarded-by', 'defined')
-         | selectattr('metadata.labels.env', 'equalto', lab_env_label) | list }}
+         | selectattr('spec.hostname', 'in', lab_node_names) | list }}
 
 - name: Remove them
   ansible.builtin.command: tctl rm node/{{ item.metadata.name }}

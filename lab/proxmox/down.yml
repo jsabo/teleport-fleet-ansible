@@ -80,6 +80,8 @@
 
     - name: Remove the lab's node records
       ansible.builtin.include_tasks: tasks/remove-node-records.yml
+      vars:
+        lab_node_names: "{{ groups['nodes'] | default([]) }}"
       loop: [1, 2, 3, 4, 5, 6]
       loop_control:
         loop_var: lab_attempt

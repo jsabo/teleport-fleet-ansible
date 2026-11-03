@@ -55,7 +55,6 @@ teleport_trust_labels:
 # What the host is. Change with playbooks/labels.yml.
 teleport_class_labels:
   lifecycle: provisioning
-  onboarded-by: ansible
 teleport_extra_labels: {}
 teleport_all_static_labels: "{{ teleport_trust_labels | combine(teleport_class_labels) | combine(teleport_extra_labels) }}"
 

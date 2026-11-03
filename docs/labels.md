@@ -9,7 +9,7 @@ fleet can be onboarded first and segmented later, without re-enrolling.
 | Class | Labels | Where set | How it changes later |
 |---|---|---|---|
 | **Trust tier** | `env` | `teleport_trust_labels` (group vars) | Re-enroll (`unenroll.yml`, then `site.yml`). |
-| **Classification** | `lifecycle`, `onboarded-by` | `teleport_class_labels` (group or host vars) | `playbooks/labels.yml` rewrites the config and reloads the agent. |
+| **Classification** | `lifecycle` | `teleport_class_labels` (group or host vars) | `playbooks/labels.yml` rewrites the config and reloads the agent. |
 
 Static labels are read by the agent once at start. `labels.yml` therefore reloads the
 service after writing the file: the unit that `teleport-update` installs maps `reload`
@@ -34,7 +34,7 @@ classification. Two consequences:
 
 ```bash
 ansible-playbook playbooks/labels.yml --limit web-01 \
-  -e '{"teleport_class_labels":{"team":"payments","service":"api","tier":"internal","lifecycle":"active","onboarded-by":"ansible"}}'
+  -e '{"teleport_class_labels":{"lifecycle":"active","team":"payments"}}'
 ```
 
 Within about ten seconds `tctl nodes ls` shows the new labels and the host UUID is

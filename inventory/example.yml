@@ -46,7 +46,6 @@ all:
                 service: postgres
                 tier: internal
                 lifecycle: provisioning
-                onboarded-by: ansible
         lab:
           vars:
             teleport_trust_labels:

@@ -122,15 +122,15 @@ its `known_hosts` file.
 
 ## Labels
 
-Every node gets a trust tier (`env`) and a classification (`lifecycle`,
-`onboarded-by`). Classification changes with `labels.yml` and an agent reload; the
-trust tier changes by re-enrolling. [docs/labels.md](docs/labels.md).
+Every node gets two labels: `env` (the trust tier) and `lifecycle` (the classification).
+Classification changes with `labels.yml` and an agent reload; the trust tier changes by
+re-enrolling. [docs/labels.md](docs/labels.md).
 
 ## After the fleet is onboarded
 
 | Task | Command |
 |---|---|
-| Reclassify a host (team, service, tier, lifecycle) | `ansible-playbook -i … playbooks/labels.yml --limit web-01 -e '{"teleport_class_labels":{...}}'` ([docs/labels.md](docs/labels.md)) |
+| Reclassify a host | `ansible-playbook -i … playbooks/labels.yml --limit web-01 -e '{"teleport_class_labels":{"lifecycle":"active"}}'` ([docs/labels.md](docs/labels.md)) |
 | Onboard more hosts later | add them to the inventory and run `site.yml --limit <new hosts>`; enrolled hosts are skipped |
 | Use an internal artifact mirror | `playbooks/mirror-sync.yml` to populate it, set `teleport_download_base_url`, re-run `playbooks/10-enroll.yml -e transport=teleport` ([docs/mirror.md](docs/mirror.md)) |
 | Put hosts in a Managed Updates group | `teleport_update_group: staging`, re-run `playbooks/10-enroll.yml -e transport=teleport` (groups: `teleport-resources/autoupdate-config-groups.yaml`) |
