@@ -3,56 +3,97 @@
 Move a fleet of Linux servers from OpenSSH to Teleport. Point the playbooks at your own
 Ansible inventory and they install the Teleport agent with Managed Updates, join each
 host with a token only it could use, stamp a standard set of labels for segmentation,
-verify access through the Teleport proxy, and switch OpenSSH off. The same steps are
-written out for doing one server by hand, so you can learn the mechanism before you
-automate it.
+verify access through the Teleport proxy, and switch OpenSSH off.
 
 Verified against Teleport 18.11 (Teleport Enterprise Cloud) on Ubuntu 24.04 and
 Rocky Linux 9; the playbooks run unchanged on both.
 
-## Start here
+New to this? [docs/concepts.md](docs/concepts.md) explains an agent, a join token,
+Managed Updates and labels in ten minutes, and
+[docs/manual-walkthrough.md](docs/manual-walkthrough.md) does one host by hand so you can
+see what the playbooks automate.
 
-1. **Understand** what changes: what an agent, a join token, Managed Updates and labels
-   are, in plain words. [docs/concepts.md](docs/concepts.md), ten minutes.
-2. **Do one host by hand**, one command at a time.
-   [docs/manual-walkthrough.md](docs/manual-walkthrough.md).
-3. **Run the playbooks on your hosts**: the quick start below, phase by phase or all at once.
+## What each host ends up with
 
-If you have a Proxmox server and want throwaway VMs to practise on, `lab/proxmox/`
-creates them and narrates a run; it is optional and nothing else depends on it
-([docs/lab-proxmox.md](docs/lab-proxmox.md)).
+- The Teleport agent, installed and kept current by Managed Updates. No version is
+  pinned in this repo; the cluster decides which one the host runs.
+- A host identity of its own, stored in `/var/lib/teleport`. Its join token was usable
+  once, by that host, and is deleted afterwards.
+- `/etc/teleport.yaml` carrying its labels, with port forwarding and file copy both off.
+- OpenSSH stopped and disabled. Nothing is masked or uninstalled, so a console can turn
+  it back on.
 
-## Quick start
+## Before you start
+
+**On the controller** — your laptop or a CI runner: `ansible-core` 2.15 or later, `tsh`
+and `tctl` matching the cluster, and `jq`.
+
+**A Teleport role that can onboard hosts.**
+`teleport-resources/role-fleet-onboarding-operator.yaml` is the reference: create, read,
+update and delete tokens; read nodes and instances; and a login on hosts labelled
+`lifecycle: provisioning`. Its `node_labels` must match the labels you stamp, because
+`tctl nodes ls` and `tsh ls` show only the nodes your roles can reach — a mismatch makes
+a correctly enrolled host invisible rather than denied.
+
+**Hosts**: any Linux with systemd, reachable over SSH as a user who can `sudo` (a key,
+or a password with `--ask-pass --ask-become-pass`), with outbound HTTPS to the proxy and
+to the download source (`cdn.teleport.dev`, or your own mirror).
+
+For an unattended controller, swap the person's login for a Machine ID bot:
+`teleport-resources/bot-fleet-onboarder.yaml`, `controller/tbot.yaml`, and
+`-e teleport_controller_identity=bot`. Everything else is identical.
+
+## Run it
 
 ```bash
 ansible-galaxy collection install -r requirements.yml
-cp inventory/example.yml inventory/fleet.yml        # your proxy, your hosts, your labels
+cp inventory/example.yml inventory/fleet.yml
 tsh login --proxy=example.teleport.sh:443
 ansible-playbook -i inventory/fleet.yml site.yml
 ```
 
-Your inventory is the input. Any Ansible inventory works (YAML, INI, dynamic) as long
-as each host is either resolvable by its inventory name or carries an `ip:` variable,
-and the group-level variables name your proxy. `inventory/example.yml` shows the shape
-and every variable you are likely to set.
+Edit `inventory/fleet.yml` before that last command. Three variables decide the rest:
 
-### Phase by phase
+| Variable | What it sets |
+|---|---|
+| `teleport_proxy` | Your cluster's address. Hosts are reached through Teleport at `<node>.<this address without its port>`, which is the name `tsh config` writes a Host block for. |
+| `teleport_ssh_login` | The login the playbooks use once a host is on Teleport. It must exist on the hosts and be granted by your role. |
+| `teleport_trust_labels` | The `env` and `site` labels each group of hosts gets. These are what your access roles match on later. |
 
-Each phase is its own playbook. Run one, look at the result, run the next:
+Each host is reached over OpenSSH at its `ip:` variable, or at its inventory name if that
+resolves. Do not set `ansible_host` — the playbooks derive it per phase. Any inventory
+format works: YAML, INI, or a dynamic source. Every other variable has a default in
+`roles/teleport_node/defaults/main.yml`.
+
+## The four phases
+
+`site.yml` runs all four in order. Each is also a playbook you can run on its own, so you
+can stop and look between them.
+
+| Phase | Connects over | What it does | What to look at |
+|---|---|---|---|
+| `00-preflight.yml` | OpenSSH | Checks each host (systemd, architecture, hostname, clock, disk) and the controller (your login, one `tctl` call), then learns which agent version the cluster advertises. Nothing is installed. | A failing host drops out and the rest continue |
+| `10-enroll.yml` | OpenSSH | Mints one token per host, installs the agent through `teleport-update`, writes `/etc/teleport.yaml`, starts the agent. Then waits once for the whole fleet to register, deletes each one-time secret and removes each token. | `tsh ls` — the new nodes with their labels |
+| `20-verify.yml` | Teleport | Read-only. Proves every host answers through the proxy, that Managed Updates are on and in the right group, and that the labels arrived. | `changed=0` and the fleet summary line |
+| `30-harden.yml` | Teleport | Stops and disables OpenSSH, in batches. | `ssh <user>@<host>` refused, `tsh ssh <login>@<node>` works |
+
+Running them one at a time:
 
 ```bash
-ansible-playbook -i inventory/fleet.yml playbooks/00-preflight.yml   # nothing installed yet; every host checked
-ansible-playbook -i inventory/fleet.yml playbooks/10-enroll.yml      # tokens, install, join, tokens removed
-tsh ls                                                               # the new nodes, with their labels
-ansible-playbook -i inventory/fleet.yml playbooks/20-verify.yml      # through Teleport; read-only; fleet summary
-ansible-playbook -i inventory/fleet.yml playbooks/30-harden.yml      # through Teleport; OpenSSH off
-ssh <user>@<host>                                                    # refused
-tsh ssh root@<node>                                                  # works
+ansible-playbook -i inventory/fleet.yml playbooks/00-preflight.yml
+ansible-playbook -i inventory/fleet.yml playbooks/10-enroll.yml
+tsh ls
+ansible-playbook -i inventory/fleet.yml playbooks/20-verify.yml
+ansible-playbook -i inventory/fleet.yml playbooks/30-harden.yml
 ```
 
-`site.yml` runs the four in sequence for an unattended fleet.
+**The last two phases connect through Teleport on purpose.** A first play writes the
+`tsh config` output to `controller/.tsh-ssh.cfg`; `ansible_host` then becomes
+`<node>.<cluster>` and `-F` points at that file. So OpenSSH is switched off by a play
+that could only reach the host because Teleport already works. A host whose Teleport path
+is broken is simply not reached, and keeps OpenSSH.
 
-### What to expect
+## How long it takes
 
 Measured on three hosts (two Ubuntu 24.04, one Rocky 9) against Teleport 18.11.1, with
 the per-task profile and timer that `ansible.cfg` enables (`ansible.posix.profile_tasks`,
@@ -71,53 +112,22 @@ secrets, read the bindings) and one `tctl tokens rm` per host, which run in para
 The controller checks and the Teleport ssh config are done once per run; a playbook run
 on its own adds about 4 s for them.
 
-Host keys are checked. The OpenSSH transport accepts a host's key on first contact and
-refuses a changed one afterwards (`StrictHostKeyChecking=accept-new`), so a rebuilt
-host needs `ssh-keygen -R <address>` before it is enrolled again. The Teleport transport
-verifies host certificates against the cluster CA that `tsh config` writes into its
-known_hosts file.
+## Host keys are checked on both transports
 
-### What you need
+The OpenSSH transport accepts a host's key on first contact and refuses a changed one
+afterwards (`StrictHostKeyChecking=accept-new`), so a rebuilt host needs
+`ssh-keygen -R <address>` before it is enrolled again. The Teleport transport verifies
+host certificates against the cluster certificate authority that `tsh config` writes into
+its `known_hosts` file.
 
-- **Controller**: `ansible-core` 2.15+, `tsh` and `tctl` matching the cluster, `jq`.
-- **A Teleport user** with a role like `teleport-resources/role-fleet-onboarding-operator.yaml`:
-  token create/read/update/delete, node and instance read, and a login on hosts labelled
-  `lifecycle: provisioning`. `tctl nodes ls` and `tsh ls` only show nodes your roles can
-  access, so the role's `node_labels` must match the labels you stamp.
-- **Hosts**: any Linux with systemd, reachable over SSH as a sudo user (key, or password
-  with `--ask-pass --ask-become-pass`), with outbound HTTPS to the proxy and to the
-  download source (`cdn.teleport.dev` or your mirror).
+## Labels
 
-Unattended runs (a CI runner, a scheduler) use a Machine ID bot instead of a person's
-login: `teleport-resources/bot-fleet-onboarder.yaml`, `controller/tbot.yaml`, and
-`-e teleport_controller_identity=bot`. Everything else is identical.
+Every node gets a trust tier (`env`, `site`), a classification (`team`, `service`,
+`tier`, `lifecycle`, `onboarded-by`) and dynamic facts (`arch`, `kernel`, `distro`).
+Classification changes with `labels.yml` and an agent reload; the trust tier changes by
+re-enrolling. [docs/labels.md](docs/labels.md).
 
-## How it works
-
-```
-OpenSSH  ──► 00 preflight   fail fast per host; learn which version the cluster advertises
-OpenSSH  ──► 10 enroll      one token per host, teleport-update enable, write /etc/teleport.yaml, start;
-                            then one wait for the fleet to register, delete each one-time secret, remove the tokens
-Teleport ──► 20 verify      read-only: updater on and in the right group, labels present, fleet summary
-Teleport ──► 30 harden      stop and disable OpenSSH, in batches (unit files stay)
-```
-
-Verify and harden connect *through Teleport*: a first play writes the `tsh config`
-output to `controller/.tsh-ssh.cfg`, then `ansible_host` becomes `<node>.<cluster>` and
-`-F` points at that file. OpenSSH is switched off by a play that could only reach the
-host because Teleport already works; a host whose Teleport path is broken is skipped
-and keeps OpenSSH.
-
-| Question | Answer |
-|---|---|
-| How is the agent installed? | Download the small `teleport-update` tarball (17 MB) for the version the cluster advertises, run `teleport-update enable --proxy … --group …`, and let the updater install the full agent, write `teleport.service` and keep the agent current. Version and edition come from `/v1/webapi/find`; the repo carries no version pin. The only host requirement is systemd. |
-| Why not the apt/yum repositories? | They install a second copy of the binary that the updater then takes over. Needless for agents. |
-| Why not pipe the cluster's install script? | It hardcodes `cdn.teleport.dev` and downloads the 234 MB agent tarball twice. Doing the steps in Ansible makes the download source a variable, so an internal mirror is one line ([docs/mirror.md](docs/mirror.md)). |
-| Which join method? | `bound_keypair`, one token per host: the token binds to the host's keypair at first join, the registration secret works once, and the token is removed after the join (it would expire after 15 minutes anyway). |
-| Why render `/etc/teleport.yaml` instead of `teleport node configure`? | The CLI cannot emit the `bound_keypair` block, the `commands` labels, or `enhanced_recording`. |
-| What about a root compromise on a node? | [docs/threat-model.md](docs/threat-model.md). |
-
-## Day two
+## After the fleet is onboarded
 
 | Task | Command |
 |---|---|
@@ -130,12 +140,26 @@ and keeps OpenSSH.
 
 All variables and their defaults: `roles/teleport_node/defaults/main.yml`.
 
-## Labels
+## Why it works this way
 
-Every node gets a trust tier (`env`, `site`), a classification (`team`, `service`,
-`tier`, `lifecycle`, `onboarded-by`) and dynamic facts (`arch`, `kernel`, `distro`).
-Classification changes with `labels.yml` and an agent reload; the trust tier changes by
-re-enrolling. [docs/labels.md](docs/labels.md).
+| Question | Answer |
+|---|---|
+| How is the agent installed? | Download the small `teleport-update` tarball (17 MB) for the version the cluster advertises, run `teleport-update enable --proxy … --group …`, and let the updater install the full agent, write `teleport.service` and keep the agent current. Version and edition come from `/v1/webapi/find`; the repo carries no version pin. The only host requirement is systemd. |
+| Why not the apt or yum repositories? | They install a second copy of the binary that the updater then takes over. Needless for agents. |
+| Why not pipe the cluster's install script? | It hardcodes `cdn.teleport.dev` and downloads the 234 MB agent tarball twice. Doing the steps in Ansible makes the download source a variable, so an internal mirror is one line ([docs/mirror.md](docs/mirror.md)). |
+| Which join method? | `bound_keypair`, one token per host: the token binds to the host's keypair at first join, the registration secret works once, and the token is removed after the join (it would expire after 15 minutes anyway). |
+| Why render `/etc/teleport.yaml` instead of running `teleport node configure`? | The command cannot emit the `bound_keypair` block, the `commands` labels, or `enhanced_recording`. |
+| What can root on a node still do? | [docs/threat-model.md](docs/threat-model.md), which also covers what happens to a host that loses its identity. |
+
+## Learning it before automating it
+
+- **The concepts in plain words** — what an agent, a join token, Managed Updates and
+  labels are, in ten minutes: [docs/concepts.md](docs/concepts.md).
+- **One host by hand**, one command at a time, so you see what the playbooks automate:
+  [docs/manual-walkthrough.md](docs/manual-walkthrough.md).
+- **Throwaway VMs to practise on**, if you have a Proxmox server: `lab/proxmox/` creates
+  a fleet, runs the whole flow with an explanation before each step, and tears it down
+  again ([docs/lab-proxmox.md](docs/lab-proxmox.md)). Optional; nothing else depends on it.
 
 ## Layout
 
