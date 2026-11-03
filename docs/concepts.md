@@ -45,10 +45,13 @@ lives on the host any more. Once the agent works, `sshd` can be switched off.
 4. The agent registers: it appears in `tctl inventory ls` (every connected agent) and,
    for users whose roles match its labels, in `tctl nodes ls` and `tsh ls`.
 5. The secret file is deleted and the token removed. The agent restarts from the
-   identity under `/var/lib/teleport/proc` for the rest of its life.
+   identity under `/var/lib/teleport/proc` for the rest of its life. A host that loses
+   that identity — rebuilt, or restored from a snapshot taken before it enrolled — has to
+   be enrolled again; see
+   [threat-model.md](threat-model.md#a-host-that-loses-its-identity-has-to-be-enrolled-again).
 
 Why `bound_keypair` and not a plain token: a plain `token` join is not consumed for
-hosts, so a copied token could enrol more machines until it expires, and it cannot be
+hosts, so a copied token could enroll more machines until it expires, and it cannot be
 tied to one host. A bound keypair token is tied to the first machine that uses it.
 
 ## How the agent is installed and kept current
@@ -66,12 +69,12 @@ version. The group is a name the cluster's `autoupdate_config` orders (for examp
 Roles do not name hosts; they match labels. A host stamped `env: prod, team: payments`
 is reachable by anyone holding a role with `node_labels: {env: prod, team: payments}`.
 Changing a host's `team` label and reloading the agent moves it to a different set of
-people without touching a single role. This repo stamps a standard set at enrolment
+people without touching a single role. This repo stamps a standard set at enrollment
 and changes the classification later with one playbook ([labels.md](labels.md)).
 
 ## Two transports, one safety property
 
-The enrol phase reaches hosts over OpenSSH because nothing else exists yet. Everything
+The enroll phase reaches hosts over OpenSSH because nothing else exists yet. Everything
 after that (verify, harden, later changes) reaches hosts **through Teleport**: Ansible
 connects to `<node>.<cluster>` with an ssh config that `tsh config` generates. The play
 that switches OpenSSH off can therefore only run on a host that Teleport already
