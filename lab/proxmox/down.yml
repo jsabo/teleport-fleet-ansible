@@ -34,9 +34,12 @@
     - name: Close this connection
       ansible.builtin.meta: reset_connection
 
-    # Timer 5 s, then SIGTERM: the agent exits within 3 s (its fast-shutdown timeout).
-    # `tsh ssh` succeeds while the agent is up and fails once the proxy has lost it; if it
-    # still succeeds after 30 s the play fails rather than destroy a connected agent.
+    # `tsh ssh` succeeds while the agent is up and fails once the proxy has lost it. The
+    # result is checked before anything is destroyed (first task of the next play), so a
+    # host that is still reachable at the end stops the run rather than lose its VM.
+    # How long that takes varies a lot: measured on Teleport Cloud 18.11.7 across four
+    # teardowns of six hosts, from 1 attempt to more than 15 (each attempt about 3 s).
+    # 40 attempts, about two minutes, covers what was seen with margin.
     - name: Wait until Teleport can no longer reach the host
       ansible.builtin.command: tsh ssh {{ teleport_ssh_login }}@{{ inventory_hostname }} true
       delegate_to: localhost
@@ -44,7 +47,7 @@
       register: lab_probe
       changed_when: false
       failed_when: false
-      retries: 15
+      retries: 40
       delay: 2
       until: lab_probe.rc != 0
 
@@ -54,6 +57,33 @@
   vars_files:
     - vars.yml
   tasks:
+    # The gate. A failed task in the play above would not stop this play, which runs on
+    # localhost, so the probe results are checked here instead.
+    - name: Refuse to destroy a VM whose agent is still connected
+      ansible.builtin.assert:
+        that: lab_still_connected | length == 0
+        fail_msg: >-
+          Teleport could still reach {{ lab_still_connected | join(', ') }} after the stop.
+          Nothing was destroyed; run down.yml again once the agent has exited.
+      vars:
+        lab_still_connected: >-
+          {{ groups['nodes'] | default([]) | map('extract', hostvars) | selectattr('lab_probe', 'defined')
+             | selectattr('lab_probe.rc', 'equalto', 0) | map(attribute='inventory_hostname') | list }}
+
+    # Read before the destroy empties the state. Works with or without -i, unlike the
+    # inventory, so reset.yml cleans up the same way down.yml does.
+    - name: Read the lab VMs' names from the Terraform state
+      ansible.builtin.command: terraform -chdir={{ playbook_dir }} output -json vms
+      register: lab_vms_out
+      changed_when: false
+      failed_when: false
+
+    - name: Record the node names
+      ansible.builtin.set_fact:
+        lab_node_names: >-
+          {{ (lab_vms_out.stdout | from_json | dict2items | selectattr('value.role', 'equalto', 'node')
+              | map(attribute='key') | list) if lab_vms_out.rc == 0 else [] }}
+
     - name: Destroy the VMs
       community.general.terraform:
         project_path: "{{ playbook_dir }}"
@@ -80,8 +110,6 @@
 
     - name: Remove the lab's node records
       ansible.builtin.include_tasks: tasks/remove-node-records.yml
-      vars:
-        lab_node_names: "{{ groups['nodes'] | default([]) }}"
       loop: [1, 2, 3, 4, 5, 6]
       loop_control:
         loop_var: lab_attempt

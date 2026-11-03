@@ -26,8 +26,8 @@ Everything is Ansible: Terraform runs through the `community.general.terraform` 
 ansible-playbook lab/proxmox/up.yml                                   # ~1 min (first time ~2 min: image download), 3 VMs, inventory, wait for SSH
 ansible-playbook -i inventory/lab.yml lab/proxmox/run.yml -e lab_pause=true   # narrated: each step explains itself, Enter to run it
 ansible-playbook -i inventory/lab.yml lab/proxmox/show.yml           # cluster and host view at any time
-ansible-playbook lab/proxmox/reset.yml                                # fresh VMs: down, then up
-ansible-playbook lab/proxmox/down.yml                                 # shut the VMs down, remove their node records
+ansible-playbook -i inventory/lab.yml lab/proxmox/reset.yml           # fresh VMs: down, then up
+ansible-playbook -i inventory/lab.yml lab/proxmox/down.yml            # shut the VMs down, remove their node records
 ```
 
 Or drive it by hand, one playbook per step, and look around between them:
@@ -96,7 +96,8 @@ private CA on the mirror VM.
 ## Cleaning up
 
 `down.yml` stops the agents through Teleport (hosts it cannot reach are skipped),
-waits until Teleport can no longer reach each host, destroys the VMs, removes any node
+waits until Teleport can no longer reach each host (and destroys nothing if one is
+still reachable after about two minutes), destroys the VMs, removes any node
 records left under the lab VMs' hostnames, and deletes the
 generated inventory. The downloaded cloud images stay on the Proxmox datastore so the
 next `up.yml` does not fetch them again; `-e lab_keep_images=false` removes them too.
