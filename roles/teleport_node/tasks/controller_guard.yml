@@ -19,12 +19,14 @@
       ansible.builtin.assert:
         that:
           - teleport_tsh_status.rc == 0
-          - (teleport_tsh_status.stdout | from_json).active.cluster == teleport_cluster_name
+          - (teleport_tsh_status.stdout | from_json).active.cluster == teleport_cluster
         fail_msg: >-
           {% if teleport_tsh_status.rc != 0 %}tsh says: {{ teleport_tsh_status.stderr | regex_replace('\x1b\[[0-9;]*m', '') | trim }}.
           {% else %}The active tsh profile is "{{ (teleport_tsh_status.stdout | from_json).active.cluster | default('none') }}",
-          not "{{ teleport_cluster_name }}".{% endif %}
+          not "{{ teleport_cluster }}".{% endif %}
           Run: tsh login --proxy={{ teleport_proxy }}
+      vars:
+        teleport_cluster: "{{ teleport_proxy | regex_replace(':\\d+$', '') }}"
       run_once: true
       when: teleport_controller_identity == 'operator'
 

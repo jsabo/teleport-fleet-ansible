@@ -7,7 +7,7 @@
 # Right after an enrollment the node's UUID is known (teleport_host_uuid) and is used
 # instead of the name: a UUID is unique even while the cluster still lists a record of
 # an earlier host that carried the same name. Later runs use the name.
-ansible_host: "{{ teleport_host_uuid | default(teleport_nodename | default(inventory_hostname)) }}.{{ teleport_cluster_name }}"
+ansible_host: "{{ teleport_host_uuid | default(teleport_nodename | default(inventory_hostname)) }}.{{ teleport_proxy | regex_replace(':\\d+$', '') }}"
 ansible_user: "{{ teleport_ssh_login }}"
 ansible_ssh_private_key_file: ""
 # teleport_ssh_config_path is a fact set by playbooks/_teleport-transport.yml, so the

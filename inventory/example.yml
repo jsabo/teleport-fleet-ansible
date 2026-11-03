@@ -13,8 +13,8 @@
 # Every other variable has a default in roles/teleport_node/defaults/main.yml.
 all:
   vars:
-    # The cluster name is derived from this by dropping the port; set
-    # teleport_cluster_name only if your cluster's name is not its proxy hostname.
+    # Nodes are reached through Teleport at <node>.<this address without the port>,
+    # which is what `tsh config` writes a Host block for.
     teleport_proxy: example.teleport.sh:443
     # OpenSSH phase
     ansible_user: ansible

@@ -1,7 +1,8 @@
 ---
 # ── Cluster ───────────────────────────────────────────────────────────────────
+# The cluster name is not a variable: it is this address without the port, derived
+# where it is used (the controller check and the Teleport transport's hostname).
 teleport_proxy: example.teleport.sh:443
-teleport_cluster_name: "{{ teleport_proxy | regex_replace(':\\d+$', '') }}"
 # Managed Updates group the agent reports. Unknown names fall back to the cluster's
 # last configured group.
 teleport_update_group: default
