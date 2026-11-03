@@ -1,6 +1,12 @@
 ---
 # What the cluster and the hosts look like right now.
 #   ansible-playbook -i inventory/lab.yml lab/proxmox/show.yml
+#
+# The host view rides the Teleport transport, which needs the ssh config the shared
+# first play writes. Without it this playbook only worked when run.yml had already
+# written it earlier in the same invocation.
+- import_playbook: ../../playbooks/_teleport-transport.yml
+
 - name: Cluster view
   hosts: nodes
   gather_facts: false
@@ -59,6 +65,10 @@
       register: lab_sshd
       changed_when: false
       failed_when: false
+      # ignore_unreachable lets a host that Teleport cannot reach carry on into this
+      # task with no facts, which is the normal state before an enrollment and after
+      # an unenrollment. Without this the loop fails on a missing os_family.
+      when: ansible_facts['os_family'] is defined
       vars:
         teleport_node_sshd_units:
           Debian: [ssh.socket, ssh.service]
