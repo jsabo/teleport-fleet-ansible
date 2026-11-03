@@ -52,7 +52,6 @@ teleport_nodename_effective: "{{ teleport_nodename | default(inventory_hostname)
 # Where the host sits. Change by re-enrolling.
 teleport_trust_labels:
   env: lab
-  site: unknown
 # What the host is. Change with playbooks/labels.yml.
 teleport_class_labels:
   lifecycle: provisioning

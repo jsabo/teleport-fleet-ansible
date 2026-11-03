@@ -9,7 +9,6 @@ all:
     teleport_ssh_login: {{ teleport_ssh_login }}
     teleport_trust_labels:
       env: {{ lab_env_label }}
-      site: {{ lab_site_label }}
 {% if lab_mirror | default(false) | bool %}
     # Mirror mode: artifacts come from the fleet-mirror VM over HTTPS with a private CA
     # (addressed by IP; the certificate carries an IP SAN), and cdn.teleport.dev resolves

@@ -58,7 +58,7 @@ Edit `inventory/fleet.yml` before that last command. Three variables decide the 
 |---|---|
 | `teleport_proxy` | Your cluster's address. Hosts are reached through Teleport at `<node>.<this address without its port>`, which is the name `tsh config` writes a Host block for. |
 | `teleport_ssh_login` | The login the playbooks use once a host is on Teleport. It must exist on the hosts and be granted by your role. |
-| `teleport_trust_labels` | The `env` and `site` labels each group of hosts gets. These are what your access roles match on later. |
+| `teleport_trust_labels` | The `env` label each group of hosts gets. This is what your access roles match on later. |
 
 Each host is reached over OpenSSH at its `ip:` variable, or at its inventory name if that
 resolves. Do not set `ansible_host` — the playbooks derive it per phase. Any inventory
@@ -122,10 +122,9 @@ its `known_hosts` file.
 
 ## Labels
 
-Every node gets a trust tier (`env`, `site`), a classification (`lifecycle`,
-`onboarded-by`) and dynamic facts (`arch`, `kernel`, `distro`).
-Classification changes with `labels.yml` and an agent reload; the trust tier changes by
-re-enrolling. [docs/labels.md](docs/labels.md).
+Every node gets a trust tier (`env`) and a classification (`lifecycle`,
+`onboarded-by`). Classification changes with `labels.yml` and an agent reload; the
+trust tier changes by re-enrolling. [docs/labels.md](docs/labels.md).
 
 ## After the fleet is onboarded
 
@@ -148,7 +147,7 @@ All variables and their defaults: `roles/teleport_node/defaults/main.yml`.
 | Why not the apt or yum repositories? | They install a second copy of the binary that the updater then takes over. Needless for agents. |
 | Why not pipe the cluster's install script? | It hardcodes `cdn.teleport.dev` and downloads the 234 MB agent tarball twice. Doing the steps in Ansible makes the download source a variable, so an internal mirror is one line ([docs/mirror.md](docs/mirror.md)). |
 | Which join method? | `bound_keypair`, one token per host: the token binds to the host's keypair at first join, the registration secret works once, and the token is removed after the join (it would expire after 15 minutes anyway). |
-| Why render `/etc/teleport.yaml` instead of running `teleport node configure`? | The command cannot emit the `bound_keypair` block, the `commands` labels, or `enhanced_recording`. |
+| Why render `/etc/teleport.yaml` instead of running `teleport node configure`? | The command cannot emit the `bound_keypair` block or `enhanced_recording`. |
 | What can root on a node still do? | [docs/threat-model.md](docs/threat-model.md), which also covers what happens to a host that loses its identity. |
 
 ## Learning it before automating it

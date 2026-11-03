@@ -10,7 +10,7 @@
     lab_node_records: >-
       {{ lab_nodes.stdout | from_json
          | selectattr('metadata.labels.onboarded-by', 'defined')
-         | selectattr('metadata.labels.site', 'equalto', lab_site_label) | list }}
+         | selectattr('metadata.labels.env', 'equalto', lab_env_label) | list }}
 
 - name: Remove them
   ansible.builtin.command: tctl rm node/{{ item.metadata.name }}

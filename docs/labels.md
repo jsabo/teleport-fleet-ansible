@@ -4,13 +4,12 @@ Teleport authorizes SSH access by matching a role's `node_labels` against the la
 node carries. These playbooks stamp every node with a standard set at enrollment so a
 fleet can be onboarded first and segmented later, without re-enrolling.
 
-## Three classes of label
+## Two classes of label
 
 | Class | Labels | Where set | How it changes later |
 |---|---|---|---|
-| **Trust tier** | `env`, `site` | `teleport_trust_labels` (group vars) | Re-enroll (`unenroll.yml`, then `site.yml`). |
+| **Trust tier** | `env` | `teleport_trust_labels` (group vars) | Re-enroll (`unenroll.yml`, then `site.yml`). |
 | **Classification** | `lifecycle`, `onboarded-by` | `teleport_class_labels` (group or host vars) | `playbooks/labels.yml` rewrites the config and reloads the agent. |
-| **Facts** | `arch`, `kernel`, `distro` | `commands:` in the agent config | Refresh themselves on a period (1 h for kernel, 24 h for the rest). |
 
 Static labels are read by the agent once at start. `labels.yml` therefore reloads the
 service after writing the file: the unit that `teleport-update` installs maps `reload`
@@ -19,7 +18,7 @@ without dropping sessions.
 
 ## Why the trust tier is separate
 
-Where a host sits (`env: prod`, `site: dc1`) is a placement decision, not a
+Where a host sits (`env: prod`) is a placement decision, not a
 classification. Two consequences:
 
 1. Roles that grant sensitive access should pin the trust tier, not only the team.

@@ -36,7 +36,6 @@
     that:
       - teleport_node_record | length == 1
       - (teleport_node_record[0].metadata.labels | combine(teleport_all_static_labels)) == teleport_node_record[0].metadata.labels
-      - "'kernel' in (teleport_node_record[0].spec.cmd_labels | default({}))"
     fail_msg: >-
       {{ teleport_nodename_effective }}: expected one node with labels {{ teleport_all_static_labels }},
       found {{ teleport_node_record | map(attribute='metadata.labels') | list }}

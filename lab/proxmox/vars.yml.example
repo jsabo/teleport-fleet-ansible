@@ -9,10 +9,9 @@ teleport_update_group: default
 # Login used through Teleport for verify/harden. Must be one of your roles' logins and
 # exist on the VMs (root always does; `ansible` is the cloud-init user).
 teleport_ssh_login: root
-# Trust-tier labels stamped on the lab VMs. tctl nodes ls and tsh only show nodes your
-# roles can access, so a role of yours must match these (e.g. node_labels env: <this>).
+# env label stamped on the lab VMs. tctl nodes ls and tsh only show nodes your roles
+# can access, so a role of yours must match it (e.g. node_labels env: <this>).
 lab_env_label: lab
-lab_site_label: lab-1
 
 # Proxmox. The token needs VM create/destroy plus Sys.AccessNetwork on the node
 # (Proxmox downloads the cloud images itself).

@@ -97,7 +97,7 @@ private CA on the mirror VM.
 
 `down.yml` stops the agents through Teleport (hosts it cannot reach are skipped),
 waits until Teleport can no longer reach each host, destroys the VMs, removes any node
-records still carrying `onboarded-by=ansible` and the lab site label, and deletes the
+records still carrying `onboarded-by=ansible` and the lab's `env` label, and deletes the
 generated inventory. The downloaded cloud images stay on the Proxmox datastore so the
 next `up.yml` does not fetch them again; `-e lab_keep_images=false` removes them too.
 

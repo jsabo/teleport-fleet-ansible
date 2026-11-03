@@ -1,6 +1,6 @@
 ---
 # Render /etc/teleport.yaml. (teleport node configure cannot emit the bound_keypair
-# block, the `commands` labels or enhanced_recording, so a template is used.)
+# block or enhanced_recording, so a template is used.)
 - name: Check for an existing configuration
   ansible.builtin.stat:
     path: /etc/teleport.yaml

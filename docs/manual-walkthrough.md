@@ -99,16 +99,8 @@ ssh_service:
   enabled: true
   labels:
     env: lab
-    site: dc1
     lifecycle: provisioning
     onboarded-by: manual
-  commands:
-    - name: kernel
-      command: [uname, -r]
-      period: 1h
-    - name: distro
-      command: [sh, -c, '. /etc/os-release && printf "%s-%s" "$ID" "$VERSION_ID"']
-      period: 24h
   port_forwarding: false
   ssh_file_copy: false
   disable_create_host_user: true

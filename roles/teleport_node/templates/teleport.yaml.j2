@@ -1,6 +1,6 @@
 # Managed by teleport-fleet-ansible (playbooks/10-enroll.yml, playbooks/labels.yml).
 # Static labels are read once at start; the playbooks reload the service (SIGHUP)
-# after changing them. Labels under `commands` refresh on their own period.
+# after changing them.
 version: v3
 teleport:
   nodename: {{ teleport_nodename_effective }}
@@ -26,16 +26,6 @@ ssh_service:
 {% for key, value in teleport_all_static_labels | dictsort %}
     {{ key }}: "{{ value }}"
 {% endfor %}
-  commands:
-    - name: arch
-      command: [uname, -m]
-      period: 24h
-    - name: kernel
-      command: [uname, -r]
-      period: 1h
-    - name: distro
-      command: [sh, -c, '. /etc/os-release && printf "%s-%s" "$ID" "$VERSION_ID"']
-      period: 24h
   enhanced_recording:
     enabled: {{ teleport_enhanced_recording | bool | lower }}
   port_forwarding: {{ teleport_port_forwarding | bool | lower }}

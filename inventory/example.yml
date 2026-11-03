@@ -33,7 +33,6 @@ all:
           vars:
             teleport_trust_labels:
               env: prod
-              site: dc1
           hosts:
             web-01:
               ip: 10.0.1.11
@@ -52,7 +51,6 @@ all:
           vars:
             teleport_trust_labels:
               env: lab
-              site: hq
           hosts:
             lab-01:
               ip: 10.0.9.11
