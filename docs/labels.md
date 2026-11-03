@@ -1,14 +1,14 @@
 # Labels: what the playbooks stamp on a node, and how to change it later
 
 Teleport authorizes SSH access by matching a role's `node_labels` against the labels a
-node carries. These playbooks stamp every node with a standard set at enrolment so a
+node carries. These playbooks stamp every node with a standard set at enrollment so a
 fleet can be onboarded first and segmented later, without re-enrolling.
 
 ## Three classes of label
 
 | Class | Labels | Where set | How it changes later |
 |---|---|---|---|
-| **Trust tier** | `env`, `site` | `teleport_trust_labels` (group vars) | Re-enrol (`unenroll.yml`, then `site.yml`). |
+| **Trust tier** | `env`, `site` | `teleport_trust_labels` (group vars) | Re-enroll (`unenroll.yml`, then `site.yml`). |
 | **Classification** | `team`, `service`, `tier`, `lifecycle`, `onboarded-by` | `teleport_class_labels` (group or host vars) | `playbooks/labels.yml` rewrites the config and reloads the agent. |
 | **Facts** | `arch`, `kernel`, `distro` | `commands:` in the agent config | Refresh themselves on a period (1 h for kernel, 24 h for the rest). |
 
@@ -46,6 +46,12 @@ unchanged. Access follows immediately:
 - The onboarding role matches `lifecycle: provisioning` only, so the moment a host is
   classified `active` the onboarding identity (operator or bot) can no longer reach it.
   The tool that enrolled the fleet loses access to it by design.
+
+Reclassify last, after `20-verify.yml` and `30-harden.yml`. Those phases ride the Teleport
+transport as the same onboarding identity, so once a host is `active` they stop being able
+to reach it, and a second `labels.yml` run against that host cannot connect either. Finish
+onboarding first, then reclassify — or give the controller a role that also matches the
+classification you are moving hosts to.
 
 ## Suggested lifecycle values
 
